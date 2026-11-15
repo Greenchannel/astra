@@ -235,6 +235,14 @@
   }
 }
 
+.modelBar {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  padding: 9px 12px 0;
+  overflow: hidden;
+}
+
 .functionRow {
   display: flex;
   align-items: center;

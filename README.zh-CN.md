@@ -1,75 +1,79 @@
-# chat-demo
+# Astra
 
 [English](README.md) | 简体中文
 
-基于 DeepSeek API 的静态聊天示例。无需应用后端，浏览器直接请求配置的 API 服务。
-
-点击 [在线体验](https://deepseek-ai.github.io/chat-demo/) 即可使用，也可以前往 [Releases](https://github.com/deepseek-ai/deepseek-chat-demo/releases) 下载压缩包，解压后双击 `index.html` 在本地使用，无需安装或构建。首次使用时，请在设置中填写 API Key。
-
-## 运行
-
-准备 Node.js 22.12+ 和 pnpm：
-
-```sh
-git clone https://github.com/deepseek-ai/chat-demo.git
-cd chat-demo
-pnpm install
-pnpm dev
-```
-
-打开 http://localhost:8090 。
-
-生成静态产物：
-
-```sh
-pnpm build
-```
-
-产物位于 `dist/`，可部署到静态服务器，也可直接打开 `dist/index.html`。直接打开时，浏览器和 API 服务需允许 `file://` 页面的存储与跨域请求。
+Astra 是一个多供应商 AI 聊天客户端，基于原 `chat-demo` 静态聊天前端扩展而来，使用 **Tauri 2** 打包为 Android 手机/平板、Windows 和 Linux 桌面应用，不支持 iOS。
 
 ## 功能
 
-- 多会话、自动标题、重命名与删除；编辑提问、重新生成和切换消息分支。
-- 流式回答、深度思考、智能搜索、链接阅读与来源引用；支持停止和符合条件的继续生成。
-- 附件上传、粘贴与拖拽，语音输入和回复朗读；移动端录音时输入框首行显示实时频谱。
-- Markdown、代码高亮、KaTeX 公式和 Mermaid 图表。
-- 简体中文与英文、浅色与深色主题、移动端布局、位置设置、历史导入导出。
+- **多供应商**：内置 DeepSeek、OpenAI、Anthropic、OpenRouter、Gemini、xAI、Groq、Mistral、Together、硅基流动、Moonshot Kimi、智谱、阿里云百炼、火山方舟、MiniMax、百度千帆、腾讯混元、Ollama、LM Studio 等预设，也可添加自定义 OpenAI 兼容服务。
+- **模型检测**：一键拉取供应商模型列表，分类对话/生图模型，并支持最小对话测试。
+- **全局模型切换**：输入区模型菜单按供应商分组，选中模型自动切换供应商。
+- **自定义 system prompt**：全局一份，留空使用当前供应商默认值，可一键恢复。
+- **长期记忆**：全局记忆库，支持手动增删改、启用/禁用，以及聊天后的自动提取；记忆会随请求注入 system prompt。
+- **生图**：对接 OpenAI 兼容 `/images/generations`，在聊天内生成图片、查看、保存和重新生成。
+- **原生网络层**：Tauri 端使用 Rust `reqwest` 发起请求，绕过 WebView CORS，并提供真正的 SSE 流式输出。
+- 保留原有的会话分支、编辑/重新生成、Markdown/KaTeX/Mermaid、语音输入与朗读、历史导入导出等能力。
 
-## 数据
+## 下载与构建
 
-API Key 和设置保存在浏览器 localStorage，会话及附件原件保存在 IndexedDB，本地数据按浏览器用户配置和站点源（origin）隔离。发送对话、上传附件和使用语音功能时，相应内容会提交给配置的 API 服务。
+所有安装包由 GitHub Actions 构建，不需要本地打包：
 
-设置中的历史导入导出使用 ZIP 格式。导入会在确认并校验成功后替换全部本地会话和附件；导出包含会话与本地可用的图片原件，不包含 API Key、设置或非图片附件原件。格式与保留范围见[历史导入导出](src/services/chat/history/README.md)。
+- `.github/workflows/ci.yml`：每次 push / PR 运行类型检查、lint、Web 构建和 `cargo check`。
+- `.github/workflows/release.yml`：推送 `v*` 标签或在 Actions 页面手动触发，产出：
+  - Android（arm64，debug 签名 APK，可直接安装）
+  - Windows（NSIS + MSI）
+  - Linux（AppImage + deb）
 
-设置 → 数据管理 → 删除所有对话，会在确认后清空全部本地会话、附件原件和未发送的草稿，停止正在生成的回复并回到新对话。API Key 和其他设置保留，已上传到 API 服务的文件不受影响。
+当前 `origin` 指向上游 `deepseek-ai/chat-demo`，请推送到你自己的 GitHub 仓库后再运行 Actions。
 
-## 开发
+### 本地开发（可选）
 
-| 命令          | 用途                |
-| ------------- | ------------------- |
-| `pnpm dev`    | 启动开发服务器      |
-| `pnpm build`  | 构建到 `dist/`      |
-| `pnpm type`   | TypeScript 类型检查 |
-| `pnpm lint`   | oxlint 检查         |
-| `pnpm format` | oxfmt 格式化        |
+```sh
+pnpm install
+pnpm icons        # 生成各平台图标
+pnpm tauri dev    # 桌面调试；Web 版可用 pnpm dev
+pnpm build        # 只构建 Web 静态文件到 dist/
+pnpm tauri build  # 桌面安装包
+```
 
-[rspack.config.ts](rspack.config.ts) 默认连接 `https://api.deepseek.com`。`createConfig({ apiOrigin, devServer })` 支持自定义 API 地址和开发服务器代理。
+Android 本地构建需要 Android SDK、NDK 与 Rust Android targets；CI 已配置好，无需在本地执行。
 
-聊天默认使用 `deepseek-flash`，通过 Anthropic 兼容的 Messages / Files API 通信；语音使用 ASR / TTS 接口。请求使用搜索、链接阅读、标题和 `latest_reminder` 等扩展，接入服务需支持相应能力。附件实际支持的格式以服务端校验为准。
+## 供应商与模型
+
+在 **设置 → 供应商** 中从预设添加供应商，填入你自己的 API Key，点“检测模型”，选择对话模型（生图供应商再选生图模型）。所有预设只包含连接信息，不内置任何 Key，字段均可编辑。
+
+- 需要 API Key 的供应商：DeepSeek、OpenAI、Anthropic 及大多数商业服务。
+- Ollama / LM Studio 默认不需要 Key；在 Android 上请把 `localhost` 换成电脑的局域网 IP，并确保同一网络。
+- DeepSeek 供应商保留原版扩展能力：深度思考、联网搜索、服务端标题、语音输入/朗读、Files API 附件。
+- OpenAI/Anthropic 供应商只支持内联图片附件；文档附件请使用 DeepSeek 供应商。
+- 供应商接口地址可能随官方调整，遇到问题时可在编辑页直接修改 base URL。
+
+## 数据与隐私
+
+- 供应商配置和 API Key 保存在本机 `localStorage`（`chat-demo:providers`）。
+- 会话、附件原件、生成图片和记忆保存在 IndexedDB（数据库 `chat-demo`）。
+- 聊天、记忆提取和生图请求只会发送到当前选择的供应商。
+- 历史导出 ZIP（格式 v4）包含会话、本地图片、生成图片和 `memory.json`；**不包含** API Key、供应商配置和 system prompt。
+- 导入会覆盖会话；若归档含 `memory.json` 也会替换记忆；v3 旧归档没有记忆文件，导入时保留现有记忆。
+- “删除全部聊天”保留记忆和供应商设置；记忆可在 **设置 → 记忆** 中单独清空。
+
+## 项目结构
 
 ```text
 src/
-  app/                 应用布局、主题与全局样式
-  components/          聊天、设置、Markdown 等界面组件
-  i18n/                中英文文案
+  app/                 应用布局、主题、视口
+  components/          聊天、设置、Markdown、供应商/记忆/生图 UI
   services/
-    api/               API 请求、SSE 与协议类型
-    chat/              会话、消息分支、本地存储与历史导入导出
-    markdown/          Markdown 解析、代码高亮与图表
+    api/               HTTP/SSE 传输、DeepSeek 协议、语音、错误处理
+    providers/         供应商预设、适配器、模型检测、system prompt
+    memory/            记忆库、注入、自动提取
+    imagegen/          OpenAI 兼容生图
+    chat/              会话、分支、存储、历史导入导出
     speech/            录音与朗读
-  utils/               通用工具
+src-tauri/             Tauri 2 工程与 Rust 原生 HTTP/SSE 命令
 ```
 
-## 许可证
+## 许可
 
-[MIT](LICENSE)。构建会将许可证复制到 `dist/LICENSE`，分发时请一并保留；第三方依赖遵循各自的许可证。
+[MIT](LICENSE)。上游 `deepseek-ai/chat-demo` 同样使用 MIT 许可；第三方依赖遵循各自许可。

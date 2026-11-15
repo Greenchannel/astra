@@ -17,6 +17,19 @@ export type ExportImage = (file: { id: string; name: string; isImage: boolean })
 
 const iso = (ms: number) => new Date(ms).toISOString()
 
+/** 生图文件在 ZIP 里的展示名；扩展名只用于可读性，读取时以 MIME 为准 */
+const generatedImageName = (id: string, mimeType: string) => {
+  const ext =
+    mimeType === 'image/jpeg'
+      ? 'jpg'
+      : mimeType === 'image/webp'
+        ? 'webp'
+        : mimeType === 'image/gif'
+          ? 'gif'
+          : 'png'
+  return `${id}.${ext}`
+}
+
 /** 来源日期可能是任意格式的原始字符串，无法解析时不导出。 */
 const isoOrNull = (value: string | null) => {
   const ms = value === null ? NaN : Date.parse(value)
@@ -121,7 +134,7 @@ const toolFragment = (tool: ServerToolUseBlock, result: ReplyBlock | undefined):
  * 引用改由正文外的来源表示，不写入标记；
  * 本轮调用过联网能力时，剥除模型原样输出的 [citation:N]。
  */
-const assistantFragments = (message: AssistantMessage): Fragment[] => {
+const assistantFragments = (message: AssistantMessage, exportImage: ExportImage): Fragment[] => {
   const { blocks } = message
   const results = new Map<string, ReplyBlock>()
   for (const block of blocks) {
@@ -177,6 +190,24 @@ const assistantFragments = (message: AssistantMessage): Fragment[] => {
     if (notice) {
       fragments.push({ type: 'TEMPLATE_RESPONSE', content: notice.text })
     }
+  }
+  if (message.images?.length) {
+    fragments.push({
+      type: 'GENERATED_IMAGE',
+      images: message.images.map((image) => {
+        const name = generatedImageName(image.id, image.mimeType)
+        return {
+          id: image.id,
+          file_name: name,
+          mime_type: image.mimeType,
+          prompt: image.prompt,
+          model: image.model,
+          revised_prompt: image.revisedPrompt ?? null,
+          inserted_at: iso(image.createdAt),
+          export_path: exportImage({ id: image.id, name, isImage: true }),
+        }
+      }),
+    })
   }
   return fragments
 }
@@ -252,7 +283,9 @@ export const toSessionFile = (original: Session, exportImage: ExportImage): Sess
       accumulated_token_usage: message.role === 'user' ? 0 : contextTokens(message),
       inserted_at: iso(message.createdAt),
       fragments:
-        message.role === 'user' ? userFragments(message, exportImage) : assistantFragments(message),
+        message.role === 'user'
+          ? userFragments(message, exportImage)
+          : assistantFragments(message, exportImage),
     }
   })
   const current = getVisibleMessages(session).at(-1)

@@ -1,6 +1,8 @@
 import { create } from 'zustand'
 import type { TranslationMessage } from '../../i18n/index.js'
 import { createId } from '../../utils/id.js'
+import type { ApiEndpoint } from '../api/client.js'
+import type { FileCapability } from '../providers/types.js'
 import {
   cancelUpload,
   isImage,
@@ -10,6 +12,9 @@ import {
   type UploadTask,
 } from '../attachments.js'
 import type { FileAttachment } from './types.js'
+
+/** 附件发送方式；OpenAI/Anthropic 只把图片内联进请求，不再上传 */
+export type AttachmentMode = FileCapability
 
 export type DraftAttachment = {
   /** 本地标识，也是 IndexedDB 原件与上传任务的 key */
@@ -46,10 +51,10 @@ const updateDraft = (sessionId: string | null, update: (draft: Draft) => Draft) 
 export const setDraftText = (sessionId: string | null, text: string) =>
   updateDraft(sessionId, (draft) => ({ ...draft, text }))
 
-const upload = (attachment: DraftAttachment, apiKey: string) => {
+const upload = (attachment: DraftAttachment, endpoint: ApiEndpoint) => {
   // 上传任务负责记录错误，输入框的附件卡片展示失败及重试入口。
   void uploadAttachment(
-    apiKey,
+    endpoint,
     attachment.id,
     attachment.file,
     attachment.file.name,
@@ -61,10 +66,17 @@ const upload = (attachment: DraftAttachment, apiKey: string) => {
 export const addDraftFiles = (
   sessionId: string | null,
   files: File[],
-  apiKey: string
+  endpoint: ApiEndpoint,
+  mode: AttachmentMode
 ): TranslationMessage | null => {
   if (files.length === 0) {
     return null
+  }
+  if (mode === 'none') {
+    return { key: 'uploadUnsupportedFormat' }
+  }
+  if (mode === 'inlineImages' && files.some((file) => !isImage(resolveMimeType(file)))) {
+    return { key: 'uploadInlineImagesOnly' }
   }
   const error = validateFiles(files, getDraft(sessionId).attachments.length)
   if (error) {
@@ -80,42 +92,65 @@ export const addDraftFiles = (
     }
   })
   updateDraft(sessionId, (draft) => ({ ...draft, attachments: [...draft.attachments, ...added] }))
-  added.forEach((attachment) => upload(attachment, apiKey))
+  if (mode === 'deepseek') {
+    added.forEach((attachment) => upload(attachment, endpoint))
+  }
   return null
 }
 
 export const retryDraftAttachment = (
   sessionId: string | null,
   attachmentId: string,
-  apiKey: string
+  endpoint: ApiEndpoint
 ) => {
   const attachment = getDraft(sessionId).attachments.find((item) => item.id === attachmentId)
   if (attachment) {
-    upload(attachment, apiKey)
+    upload(attachment, endpoint)
   }
 }
 
-/** 发送按钮和实际提交共用规则：有内容，且全部附件已上传成功。 */
-export const prepareDraftMessage = (draft: Draft, tasks: Record<string, UploadTask>) => {
+/** 发送按钮和实际提交共用规则：有内容，且需要的附件都已就绪。 */
+export const prepareDraftMessage = (
+  draft: Draft,
+  tasks: Record<string, UploadTask>,
+  mode: AttachmentMode
+) => {
   const text = draft.text.trim()
   if (!text && draft.attachments.length === 0) {
     return null
   }
-  const files: (FileAttachment & { serverId: string; blob: Blob })[] = []
+  if (mode === 'none' && draft.attachments.length > 0) {
+    return null
+  }
+  const files: (FileAttachment & { blob: Blob })[] = []
   for (const attachment of draft.attachments) {
-    const task = tasks[attachment.id]
-    if (task?.status !== 'done' || !task.serverId) {
+    if (mode === 'deepseek') {
+      const task = tasks[attachment.id]
+      if (task?.status !== 'done' || !task.serverId) {
+        return null
+      }
+      files.push({
+        id: attachment.id,
+        serverId: task.serverId,
+        name: attachment.file.name,
+        size: attachment.file.size,
+        isImage: attachment.isImage,
+        mimeType: resolveMimeType(attachment.file),
+        blob: attachment.file,
+      })
+    } else if (mode === 'inlineImages' && attachment.isImage) {
+      files.push({
+        id: attachment.id,
+        serverId: null,
+        name: attachment.file.name,
+        size: attachment.file.size,
+        isImage: true,
+        mimeType: resolveMimeType(attachment.file),
+        blob: attachment.file,
+      })
+    } else {
       return null
     }
-    files.push({
-      id: attachment.id,
-      serverId: task.serverId,
-      name: attachment.file.name,
-      size: attachment.file.size,
-      isImage: attachment.isImage,
-      mimeType: resolveMimeType(attachment.file),
-      blob: attachment.file,
-    })
   }
   return { text, files }
 }

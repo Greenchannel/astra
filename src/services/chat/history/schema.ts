@@ -163,6 +163,23 @@ const readFragment: Read<Fragment> = (value) => {
       }
     case 'FILE':
       return { type, files: list(fileEntry)(item.files) }
+    case 'GENERATED_IMAGE':
+      return {
+        type,
+        images: list((value) => {
+          const entry = record(value)
+          return {
+            id: string(entry.id),
+            file_name: string(entry.file_name),
+            mime_type: string(entry.mime_type),
+            prompt: string(entry.prompt),
+            model: string(entry.model),
+            revised_prompt: nullable(string)(entry.revised_prompt),
+            inserted_at: time(entry.inserted_at),
+            export_path: nullable(string)(entry.export_path),
+          }
+        })(item.images),
+      }
     case 'TOOL_IMAGE_SEARCH':
       return {
         type,
@@ -226,13 +243,18 @@ const sessionId: Read<string> = (value) => {
   return id && !/[/\\]/.test(id) && id !== '.' && id !== '..' ? id : invalid()
 }
 
-/** 版本号用于校验归档格式兼容性；字段结构由各字段的校验函数保证。 */
+/**
+ * 版本号用于校验归档格式兼容性；字段结构由各字段的校验函数保证。
+ * v3 归档没有 memory.json 和 GENERATED_IMAGE，仍可导入。
+ */
+const SUPPORTED_VERSIONS = [3, EXPORT_FORMAT_VERSION]
+
 export const checkManifest = (value: unknown): void => {
   const version = record(value).export_format_version
   if (typeof version === 'number' && version > EXPORT_FORMAT_VERSION) {
     fail('backupNewerVersion')
   }
-  if (version !== EXPORT_FORMAT_VERSION) {
+  if (typeof version !== 'number' || !SUPPORTED_VERSIONS.includes(version)) {
     fail('backupInvalidVersion')
   }
 }

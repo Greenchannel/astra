@@ -1,8 +1,9 @@
 import { openDB, type DBSchema, type IDBPDatabase } from 'idb'
+import type { MemoryItem } from '../memory/types.js'
 import { toSessionSummary, type Session, type SessionSummary } from './types.js'
 
 /** IndexedDB 存储结构版本；新增或调整存储、索引时递增。 */
-const DB_VERSION = 11
+const DB_VERSION = 12
 
 /** 文件原件按附件的本地 id 存储，所有引用同一 id 的消息共用一份；用于缩略图、打开查看，以及没有 serverId 时补传。 */
 export type StoredFile = {
@@ -29,6 +30,8 @@ interface ChatDB extends DBSchema {
    */
   sessionsStaging: { key: string; value: Session }
   filesStaging: { key: string; value: StoredFile }
+  /** 全局长期记忆 */
+  memories: { key: string; value: MemoryItem }
 }
 
 let dbPromise: Promise<IDBPDatabase<ChatDB>> | null = null
@@ -38,7 +41,9 @@ const storedSummary = (session: Session): StoredSessionSummary => ({
   fileIds: [
     ...new Set(
       session.messages.flatMap((message) =>
-        message.role === 'user' ? message.files.map((file) => file.id) : []
+        message.role === 'user'
+          ? message.files.map((file) => file.id)
+          : (message.images ?? []).map((image) => image.id)
       )
     ),
   ],
@@ -57,7 +62,13 @@ const getDB = () =>
   (dbPromise ??= openDB<ChatDB>('chat-demo', DB_VERSION, {
     upgrade(db, _oldVersion, _newVersion, tx) {
       // 初始化当前格式需要的存储与索引，不迁移旧消息。
-      for (const name of ['sessions', 'files', 'sessionsStaging', 'filesStaging'] as const) {
+      for (const name of [
+        'sessions',
+        'files',
+        'sessionsStaging',
+        'filesStaging',
+        'memories',
+      ] as const) {
         if (!db.objectStoreNames.contains(name)) {
           db.createObjectStore(name, { keyPath: 'id' })
         }
@@ -242,6 +253,39 @@ export const commitStaging = async (): Promise<SessionSummary[]> => {
   await Promise.all([move('sessionsStaging', 'sessions'), move('filesStaging', 'files'), tx.done])
   // 直接返回本次提交的列表，调用方无需在替换成功后再发起可能失败的读取。
   return summaries
+}
+
+export const loadMemories = async (): Promise<MemoryItem[]> =>
+  (await getDB()).getAll('memories')
+
+export const putMemory = async (item: MemoryItem): Promise<void> => {
+  await (await getDB()).put('memories', item)
+}
+
+export const deleteMemory = async (id: string): Promise<void> => {
+  await (await getDB()).delete('memories', id)
+}
+
+export const clearMemories = async (): Promise<void> => {
+  await (await getDB()).clear('memories')
+}
+
+export const replaceMemories = async (items: MemoryItem[]): Promise<void> => {
+  const tx = (await getDB()).transaction('memories', 'readwrite')
+  await Promise.all([
+    (async () => {
+      try {
+        await tx.store.clear()
+        for (const item of items) {
+          await tx.store.put(item)
+        }
+      } catch (error) {
+        abortTransaction(tx)
+        throw error
+      }
+    })(),
+    tx.done,
+  ])
 }
 
 /** 本地存储失败不打断对话，只在控制台留痕 */

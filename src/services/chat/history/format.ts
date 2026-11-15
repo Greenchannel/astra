@@ -9,7 +9,7 @@
 /** 2026-11-11T02:33:23.270Z */
 export type Iso8601Utc = string
 
-export const EXPORT_FORMAT_VERSION = 3
+export const EXPORT_FORMAT_VERSION = 4
 
 /** manifest.json，ZIP 的第一个条目 */
 export type Manifest = { export_format_version: typeof EXPORT_FORMAT_VERSION }
@@ -192,6 +192,20 @@ export type ToolImageSearchFragment = {
   group_id?: number
 }
 
+/** 生图结果；图片原件同样放在会话目录下 */
+export type GeneratedImageEntry = {
+  id: string
+  file_name: string
+  mime_type: string
+  prompt: string
+  model: string
+  revised_prompt: string | null
+  inserted_at: Iso8601Utc
+  export_path: string | null
+}
+
+export type GeneratedImageFragment = { type: 'GENERATED_IMAGE'; images: GeneratedImageEntry[] }
+
 export type Fragment =
   | RequestFragment
   | ResponseFragment
@@ -206,3 +220,4 @@ export type Fragment =
   | ReadLinkFragment
   | FileFragment
   | ToolImageSearchFragment
+  | GeneratedImageFragment

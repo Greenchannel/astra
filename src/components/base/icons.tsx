@@ -1,3 +1,39 @@
+export const IconServerOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M2.5 3.25C2.5 2.56 3.06 2 3.75 2h8.5c.69 0 1.25.56 1.25 1.25v2.5C13.5 6.44 12.94 7 12.25 7h-8.5C3.06 7 2.5 6.44 2.5 5.75v-2.5Zm1.5.25v2h8v-2h-8Zm-1.5 6C2.5 8.81 3.06 8.25 3.75 8.25h8.5c.69 0 1.25.56 1.25 1.25v2.5c0 .69-.56 1.25-1.25 1.25h-8.5c-.69 0-1.25-.56-1.25-1.25v-2.5Zm1.5.25v2h8v-2h-8Z"
+      fill="currentColor"
+    />
+    <circle cx="4" cy="4.5" r=".85" fill="currentColor" />
+    <circle cx="4" cy="10.75" r=".85" fill="currentColor" />
+  </svg>
+)
+
+export const IconBrainOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M6.2 2.1a2.35 2.35 0 0 0-2.3 1.86A2.2 2.2 0 0 0 2.4 6.3c0 .4.11.78.3 1.1A2.25 2.25 0 0 0 3.65 11a2.3 2.3 0 0 0 2.4 1.95V13a.75.75 0 0 0 1.5 0V3.35A1.25 1.25 0 0 0 6.2 2.1Zm3.6 0a1.25 1.25 0 0 0-1.35 1.25V13a.75.75 0 0 0 1.5 0v-.05A2.3 2.3 0 0 0 12.35 11a2.25 2.25 0 0 0 .95-3.6c.19-.32.3-.7.3-1.1a2.2 2.2 0 0 0-1.5-2.34A2.35 2.35 0 0 0 9.8 2.1Z"
+      stroke="currentColor"
+      strokeWidth="1.2"
+      strokeLinejoin="round"
+    />
+  </svg>
+)
+
+export const IconPhotoSparkleOutline16 = () => (
+  <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
+    <path
+      d="M2.5 4.5A1.5 1.5 0 0 1 4 3h5.2a1.5 1.5 0 0 1 1.5 1.5v1.1a.75.75 0 0 1-1.5 0V4.5H4v7h5.2v-1.1a.75.75 0 0 1 1.5 0v1.1a1.5 1.5 0 0 1-1.5 1.5H4a1.5 1.5 0 0 1-1.5-1.5v-7Z"
+      fill="currentColor"
+    />
+    <path d="m4.4 10 2.2-2.4 1.4 1.5-2.2 2.4-1.4-1.5Z" fill="currentColor" />
+    <path
+      d="M13.3 3.2l.35.95.95.35-.95.35-.35.95-.35-.95-.95-.35.95-.35.35-.95ZM12.2 7.4l.25.65.65.25-.65.25-.25.65-.25-.65-.65-.25.65-.25.25-.65Z"
+      fill="currentColor"
+    />
+  </svg>
+)
+
 export const IconCheckOutline16 = () => (
   <svg width={16} height={16} viewBox="0 0 16 16" fill="none" xmlns="http://www.w3.org/2000/svg">
     <path

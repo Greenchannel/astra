@@ -1,9 +1,16 @@
 import { create } from 'zustand'
 import { createId } from '../../utils/id.js'
-import { ApiError, streamMessage } from '../api/client.js'
-import type { ChatModel, CreateMessageRequest } from '../api/types.js'
+import { ApiError } from '../api/client.js'
 import { extractFileIds, getFileErrorCode, isRetryableApiError } from '../api/errors.js'
 import { cancelUpload, describeUploadError, uploadAttachment, useUploads } from '../attachments.js'
+import { generateImages } from '../imagegen/index.js'
+import { conversationText } from '../providers/adapters/shared.js'
+import { getAdapter } from '../providers/adapters/index.js'
+import { buildSystemPrompt } from '../providers/detect.js'
+import { getChatProvider, getProviderById } from '../providers/store.js'
+import type { ProviderConfig } from '../providers/types.js'
+import { currentMemoryBlock } from '../memory/prompt.js'
+import { scheduleMemoryExtraction } from '../memory/extract.js'
 import { useSettings } from '../settings.js'
 import { appendBranch, getVisibleMessages, normalizeSession, selectVersion } from './branches.js'
 import * as db from './db.js'
@@ -19,8 +26,8 @@ import {
   applyEvent,
   canContinueReply,
   getContextRounds,
+  getReplyText,
   settleReply,
-  toRequestMessages,
 } from './reply.js'
 import {
   toSessionSummary,
@@ -31,33 +38,37 @@ import {
   type SessionSummary,
   type UserMessage,
 } from './types.js'
+import type { GeneratedImage } from '../providers/types.js'
+import { cacheBlob, getCachedBlob } from './blobCache.js'
 
-/** deepseek-flash 同时支持深度思考与图片输入 */
-const MODEL: ChatModel = 'deepseek-flash'
-/** 所有生成请求统一携带的助手身份说明 */
-const SYSTEM_PROMPT = '该助手为DeepSeek，由深度求索公司创造。'
 /** 保留最近打开的详情；当前会话、生成中及尚未成功保存的会话不淘汰。 */
 const SESSION_CACHE_LIMIT = 5
-/** 安全审核固定开启，所有请求都走扩展模式 */
-const SAFETY_CHECK = { level: 'high' } as const
 /** 服务端判定 file_id 失效后，重新补传并重发的最多次数（不含首次请求） */
 const FILE_RETRY_LIMIT = 2
 /** 退避基数，第 n 次重试等待 2^n 倍；连续失败达到上限就放弃，把原始报错展示出来 */
 const FILE_RETRY_BASE_DELAY = 1000
 
-/** 阅读链接始终开启，智能搜索开关控制是否另行声明搜索工具（含边想边搜）。 */
-const serverTools = (search: boolean): CreateMessageRequest['tools'] => {
-  const tools: CreateMessageRequest['tools'] = [
-    { type: 'deepseek_read_url', name: 'deepseek_read_url' },
-  ]
-  if (search) {
-    tools.push({ type: 'deepseek_web_search', name: 'deepseek_web_search' })
-  }
-  return tools
-}
-
 /** 允许自动补标题的请求；手动重命名后取消本轮标题写入，包含主动清空标题的情况。 */
 const titleRequests = new Set<AbortController>()
+
+/** 不支持服务端标题的供应商，用首条消息本地截断作为标题 */
+const localTitle = (text: string) => {
+  const cleaned = text.replace(/\s+/g, ' ').trim()
+  return cleaned.length > 30 ? `${cleaned.slice(0, 30)}…` : cleaned
+}
+
+const setTitleIfEmpty = (sessionId: string, title: string) => {
+  if (!title) {
+    return
+  }
+  updateSession(sessionId, (session) => (session.title ? session : { ...session, title }))
+}
+
+const providerUsable = (provider: ProviderConfig | null): provider is ProviderConfig =>
+  provider !== null &&
+  provider.chatModel !== null &&
+  (!provider.capabilities.requiresApiKey || provider.apiKey.trim() !== '')
+
 
 type ChatState = {
   ready: boolean
@@ -253,16 +264,18 @@ export const bindChatPersistence = () => {
   }
 }
 
-/** 按当前开关创建回复：深度思考对应 thinking，智能搜索控制 deepseek_web_search。 */
+/** 按当前供应商与开关创建回复；不支持的能力自动关闭。 */
 const createReply = (): AssistantMessage => {
+  const provider = getChatProvider()
   const { thinking, search } = useSettings.getState()
   return {
     id: createId(),
     role: 'assistant',
     createdAt: Date.now(),
-    model: MODEL,
-    thinking,
-    search,
+    model: provider?.chatModel ?? null,
+    providerId: provider?.id ?? null,
+    thinking: provider?.capabilities.thinking ? thinking : false,
+    search: provider?.capabilities.search ? search : false,
     prefix: true,
     status: 'pending',
     blocks: [],
@@ -549,7 +562,15 @@ export const sendMessage = (targetSessionId: string | null) => {
   if (get().importingHistory || !get().ready) {
     return false
   }
-  const prepared = prepareDraftMessage(getDraft(targetSessionId), useUploads.getState().tasks)
+  const provider = getChatProvider()
+  if (!providerUsable(provider)) {
+    return false
+  }
+  const prepared = prepareDraftMessage(
+    getDraft(targetSessionId),
+    useUploads.getState().tasks,
+    provider.capabilities.files
+  )
   if (!prepared) {
     return false
   }
@@ -588,14 +609,10 @@ export const sendMessage = (targetSessionId: string | null) => {
     id: createId(),
     role: 'user',
     content: text,
-    files: files.map(({ id, serverId, name, size, isImage, mimeType }) => ({
-      id,
-      serverId,
-      name,
-      size,
-      isImage,
-      mimeType,
-    })),
+    files: files.map(({ id, serverId, name, size, isImage, mimeType, blob }) => {
+      cacheBlob(id, blob)
+      return { id, serverId, name, size, isImage, mimeType }
+    }),
     createdAt: now,
   }
   const reply = createReply()
@@ -706,12 +723,18 @@ export const continueReply = (sessionId: string, messageId: string) => {
     return
   }
   const { thinking, search } = useSettings.getState()
+  const previousProvider = getProviderById(previous.providerId)
+  const fallbackProvider = getChatProvider()
+  const targetProvider = providerUsable(previousProvider) ? previousProvider : fallbackProvider
   const reply: AssistantMessage = {
     ...previous,
-    // 未记录请求配置的回复，续写时使用默认模型和当前开关。
-    model: previous.model ?? MODEL,
-    thinking: previous.thinking ?? thinking,
-    search: previous.search ?? search,
+    // 原供应商还在就沿用原配置；被删除或失效时使用当前供应商
+    model: providerUsable(previousProvider)
+      ? (previous.model ?? previousProvider.chatModel)
+      : (targetProvider?.chatModel ?? null),
+    providerId: targetProvider?.id ?? null,
+    thinking: previous.thinking ?? (targetProvider?.capabilities.thinking ? thinking : false),
+    search: previous.search ?? (targetProvider?.capabilities.search ? search : false),
     status: 'pending',
     stopReason: undefined,
     stopDetails: undefined,
@@ -776,7 +799,10 @@ const saveServerIds = (sessionId: string, serverIds: Map<string, string>) => {
  * 附件的服务端 id：已有直接用；正在上传的等待同一任务；否则读取本地原件补传。
  * 本地也没有原件（导入的文档附件只有元数据）时返回 null，该附件只展示、不进入请求。
  */
-const ensureServerId = async (apiKey: string, file: FileAttachment): Promise<string | null> => {
+const ensureServerId = async (
+  provider: ProviderConfig,
+  file: FileAttachment
+): Promise<string | null> => {
   if (file.serverId) {
     return file.serverId
   }
@@ -784,11 +810,17 @@ const ensureServerId = async (apiKey: string, file: FileAttachment): Promise<str
   if (task?.status === 'done') {
     return task.serverId
   }
-  const blob = await db.loadFile(file.id)
+  const blob = getCachedBlob(file.id) ?? (await db.loadFile(file.id))
   if (!blob) {
     return null
   }
-  return uploadAttachment(apiKey, file.id, blob, file.name, file.isImage)
+  return uploadAttachment(
+    { baseUrl: provider.baseUrl, apiKey: provider.apiKey },
+    file.id,
+    blob,
+    file.name,
+    file.isImage
+  )
 }
 
 /** 用会话里的最新消息替换请求快照：重传前会重置附件的 serverId，快照必须跟着更新 */
@@ -813,12 +845,16 @@ const refreshRequest = (sessionId: string, request: Request): Request => {
  * - 历史轮次（仅进入上下文的）中没有 serverId 的附件，多为导入的图片：从最新的消息往前逐张补传，
  *   失败静默跳过，该附件不进入本次请求，下次发送时再试。
  */
-const prepareFiles = async (sessionId: string, request: Request, signal: AbortSignal) => {
+const prepareFiles = async (
+  sessionId: string,
+  request: Request,
+  signal: AbortSignal,
+  provider: ProviderConfig
+) => {
   const epoch = historyEpoch
   // 服务端判定 file_id 失效时会清掉会话里的 serverId，先用最新消息替换请求快照，
   // 否则快照里仍是旧 id，补传会直接复用它。
   request = refreshRequest(sessionId, request)
-  const apiKey = useSettings.getState().apiKey ?? ''
   const serverIds = new Map<string, string>()
   // 停止生成立即生效；上传本身不取消（输入框与其他消息可能共用同一任务），完成后照常写回 serverId
   const aborted = new Promise<never>((_, reject) => {
@@ -826,7 +862,7 @@ const prepareFiles = async (sessionId: string, request: Request, signal: AbortSi
   })
   const uploads = Promise.allSettled(
     request.question.files.map(async (file) => {
-      const serverId = await ensureServerId(apiKey, file)
+      const serverId = await ensureServerId(provider, file)
       if (serverId) {
         serverIds.set(file.id, serverId)
       }
@@ -854,7 +890,7 @@ const prepareFiles = async (sessionId: string, request: Request, signal: AbortSi
   for (const file of pending.values()) {
     signal.throwIfAborted()
     try {
-      const serverId = await Promise.race([ensureServerId(apiKey, file), aborted])
+      const serverId = await Promise.race([ensureServerId(provider, file), aborted])
       if (serverId) {
         serverIds.set(file.id, serverId)
         saveServerIds(sessionId, new Map([[file.id, serverId]]))
@@ -961,6 +997,8 @@ const waitForRetry = (attempt: number, signal: AbortSignal) =>
  */
 const streamReply = async (sessionId: string, initial: AssistantMessage, request: Request) => {
   const controller = new AbortController()
+  const previousProvider = getProviderById(initial.providerId)
+  const provider = providerUsable(previousProvider) ? previousProvider : getChatProvider()
   if (!getSession(sessionId)?.title) {
     titleRequests.add(controller)
   }
@@ -975,108 +1013,136 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
   streamFlushes.set(sessionId, flush)
 
   try {
-    for (let attempt = 0; ; attempt += 1) {
-      /** 附件补齐前出错属于上传失败，请求还没有发出 */
-      let preparing = true
-      let receivedContent = false
-      try {
-        const prepared = await prepareFiles(sessionId, request, controller.signal)
-        preparing = false
-        // 附件就绪后获取本轮信息；续写沿用原回答快照，重新生成的快照独立保存。
-        const latestReminder = prepared.prefix
-          ? prepared.prefix.latestReminder
-          : createLatestReminder(useSettings.getState())
-        reply = { ...reply, latestReminder }
-        updateReply(sessionId, reply)
-        persist(sessionId)
-        const messages = toRequestMessages(
-          prepared.history,
-          prepared.question,
-          prepared.prefix,
-          initial.thinking ?? false,
-          latestReminder
-        )
-        const events = streamMessage(
-          useSettings.getState().apiKey ?? '',
-          {
-            model: initial.model ?? MODEL,
-            system: SYSTEM_PROMPT,
-            messages,
-            thinking: { type: initial.thinking ? 'enabled' : 'disabled' },
-            safety_check: SAFETY_CHECK,
-            tools: serverTools(initial.search ?? false),
-            ...(titleRequests.has(controller) ? { title: { enabled: true } } : {}),
-          },
-          controller.signal
-        )
-        const blockIndexes = new Map<number, number>()
-        for await (const event of events) {
-          receivedContent ||= event.type === 'content_block_start'
-          if (
-            event.type === 'message_delta' &&
-            (event.delta.stop_reason === 'end_turn' || event.delta.stop_reason === 'max_tokens') &&
-            event.delta.title?.trim() &&
-            titleRequests.has(controller) &&
-            !controller.signal.aborted &&
-            !get().importingHistory
-          ) {
-            const title = event.delta.title.trim()
-            updateSession(sessionId, (session) => (session.title ? session : { ...session, title }))
-            titleRequests.delete(controller)
+    if (!providerUsable(provider)) {
+      reply = settleReply(reply, 'error', Date.now(), {
+        kind: 'protocol',
+        message: '',
+        localMessage: { key: 'providerNotConfigured' },
+      })
+    } else {
+      for (let attempt = 0; ; attempt += 1) {
+        /** 附件补齐前出错属于上传失败，请求还没有发出 */
+        let preparing = true
+        let receivedContent = false
+        try {
+          const prepared =
+            provider.capabilities.files === 'deepseek'
+              ? await prepareFiles(sessionId, request, controller.signal, provider)
+              : refreshRequest(sessionId, request)
+          preparing = false
+          const latestReminder =
+            provider.kind === 'deepseek'
+              ? prepared.prefix
+                ? prepared.prefix.latestReminder
+                : createLatestReminder(useSettings.getState())
+              : undefined
+          reply = { ...reply, latestReminder }
+          updateReply(sessionId, reply)
+          persist(sessionId)
+          if (!provider.capabilities.title) {
+            setTitleIfEmpty(sessionId, localTitle(prepared.question.content))
           }
-          reply = applyEvent(reply, event, Date.now(), blockIndexes)
-          if (document.visibilityState === 'hidden') {
-            flush()
-          } else {
-            frame ||= requestAnimationFrame(flush)
+          const events = getAdapter(provider.kind).stream(
+            provider,
+            {
+              history: prepared.history,
+              question: prepared.question,
+              prefix: prepared.prefix,
+              thinking: initial.thinking ?? false,
+              search: initial.search ?? false,
+              system: buildSystemPrompt(provider, currentMemoryBlock()),
+              title: provider.capabilities.title && titleRequests.has(controller),
+              latestReminder,
+            },
+            controller.signal
+          )
+          const blockIndexes = new Map<number, number>()
+          for await (const event of events) {
+            receivedContent ||= event.type === 'content_block_start'
+            if (
+              event.type === 'message_delta' &&
+              (event.delta.stop_reason === 'end_turn' ||
+                event.delta.stop_reason === 'max_tokens') &&
+              event.delta.title?.trim() &&
+              titleRequests.has(controller) &&
+              !controller.signal.aborted &&
+              !get().importingHistory
+            ) {
+              const title = event.delta.title.trim()
+              updateSession(sessionId, (session) =>
+                session.title ? session : { ...session, title }
+              )
+              titleRequests.delete(controller)
+            }
+            reply = applyEvent(reply, event, Date.now(), blockIndexes)
+            if (document.visibilityState === 'hidden') {
+              flush()
+            } else {
+              frame ||= requestAnimationFrame(flush)
+            }
           }
-        }
-        reply = settleReply(reply, 'done', Date.now())
-        break
-      } catch (error) {
-        if (controller.signal.aborted) {
-          reply = settleReply(reply, 'stopped', Date.now())
+          reply = settleReply(reply, 'done', Date.now())
           break
-        }
-        if (preparing) {
-          reply = settleReply(reply, 'error', Date.now(), {
-            kind: 'upload',
-            message: '',
-            localMessage: describeUploadError(error),
-            retryable: isRetryableApiError(error),
-          })
-          break
-        }
-        // 附件失效：重新补传后重发。收到过内容块（含丢弃的客户端工具）后不自动重发。
-        if (
-          attempt < FILE_RETRY_LIMIT &&
-          !receivedContent &&
-          reuploadInvalidatedFiles(sessionId, request, error)
-        ) {
-          await waitForRetry(attempt, controller.signal)
+        } catch (error) {
           if (controller.signal.aborted) {
             reply = settleReply(reply, 'stopped', Date.now())
             break
           }
-          continue
+          if (preparing) {
+            reply = settleReply(reply, 'error', Date.now(), {
+              kind: 'upload',
+              message: '',
+              localMessage: describeUploadError(error),
+              retryable: isRetryableApiError(error),
+            })
+            break
+          }
+          // 附件失效：只有 DeepSeek Files API 需要重新补传后重发。
+          if (
+            provider.capabilities.files === 'deepseek' &&
+            attempt < FILE_RETRY_LIMIT &&
+            !receivedContent &&
+            reuploadInvalidatedFiles(sessionId, request, error)
+          ) {
+            await waitForRetry(attempt, controller.signal)
+            if (controller.signal.aborted) {
+              reply = settleReply(reply, 'stopped', Date.now())
+              break
+            }
+            continue
+          }
+          if (error instanceof ApiError && error.kind === 'interrupted' && reply.stopReason) {
+            // 已收到 message_delta 的结束原因，只是缺了结尾的 message_stop
+            reply = settleReply(reply, 'done', Date.now())
+          } else if (error instanceof ApiError) {
+            reply = settleReply(reply, 'error', Date.now(), {
+              kind: error.kind,
+              message: error.message,
+              status: error.status,
+              localMessage: error.localMessage,
+            })
+          } else {
+            reply = settleReply(reply, 'error', Date.now(), {
+              kind: 'protocol',
+              message: error instanceof Error ? error.message : String(error),
+            })
+          }
+          break
         }
-        if (error instanceof ApiError && error.kind === 'interrupted' && reply.stopReason) {
-          // 已收到 message_delta 的结束原因，只是缺了结尾的 message_stop
-          reply = settleReply(reply, 'done', Date.now())
-        } else if (error instanceof ApiError) {
-          reply = settleReply(reply, 'error', Date.now(), {
-            kind: error.kind,
-            message: error.message,
-            status: error.status,
-            localMessage: error.localMessage,
-          })
-        } else {
-          reply = settleReply(reply, 'error', Date.now(), {
-            kind: 'protocol',
-            message: error instanceof Error ? error.message : String(error),
-          })
-        }
-        break
+      }
+      // 回复正常结束后异步提取长期记忆；自动记忆失败不影响聊天
+      if (reply.status === 'done') {
+        const replyText = getReplyText(reply).trim()
+        scheduleMemoryExtraction(
+          provider,
+          sessionId,
+          [
+            conversationText(request.history, request.question),
+            replyText ? `Assistant: ${replyText}` : '',
+          ]
+            .filter(Boolean)
+            .join('\n\n')
+        )
       }
     }
   } finally {
@@ -1091,4 +1157,142 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
     }))
     persist(sessionId)
   }
+}
+
+export type ImageGenRequest = {
+  prompt: string
+  providerId: string
+  model: string
+  size?: string
+  count?: number
+}
+
+/** 在聊天内生成图片：写入一条用户提示 + 一条带图片的 assistant 消息 */
+export const generateImage = (targetSessionId: string | null, options: ImageGenRequest): boolean => {
+  if (get().importingHistory) {
+    return false
+  }
+  const prompt = options.prompt.trim()
+  const provider = getProviderById(options.providerId)
+  if (
+    !prompt ||
+    !provider ||
+    !provider.capabilities.images ||
+    !options.model ||
+    (provider.capabilities.requiresApiKey && !provider.apiKey.trim())
+  ) {
+    return false
+  }
+  const now = Date.now()
+  let sessionId = targetSessionId
+  if (sessionId !== null && (deletingSessions.has(sessionId) || getStreamController(sessionId))) {
+    return false
+  }
+  if (sessionId === null) {
+    const session: Session = {
+      id: createId(),
+      title: '',
+      createdAt: now,
+      updatedAt: now,
+      messages: [],
+      rootMessageId: null,
+    }
+    sessionId = session.id
+    touchSession(session.id)
+    set((state) => ({
+      sessions: [toSessionSummary(session), ...state.sessions],
+      sessionCache: { ...state.sessionCache, [session.id]: session },
+      activeId: session.id,
+    }))
+  }
+  const current = getSession(sessionId)
+  if (!current) {
+    return false
+  }
+  const targetId = sessionId
+  const controller = new AbortController()
+  set((state) => ({ streaming: { ...state.streaming, [targetId]: controller } }))
+  const history = getVisibleMessages(current)
+  const question: UserMessage = {
+    id: createId(),
+    role: 'user',
+    content: prompt,
+    files: [],
+    createdAt: now,
+  }
+  let reply: AssistantMessage = {
+    id: createId(),
+    role: 'assistant',
+    createdAt: now,
+    model: options.model,
+    providerId: provider.id,
+    prefix: false,
+    status: 'streaming',
+    blocks: [],
+  }
+  updateSession(targetId, (session) => ({
+    ...appendBranch(session, history.at(-1)?.id ?? null, [question, reply]),
+    updatedAt: now,
+  }))
+  setTitleIfEmpty(targetId, localTitle(prompt))
+  persist(targetId)
+  void (async () => {
+    try {
+      const results = await generateImages(
+        provider,
+        {
+          prompt,
+          model: options.model,
+          size: options.size,
+          count: options.count,
+        },
+        controller.signal
+      )
+      // Tauri 的非流式请求不能在 Rust 侧中止；返回后检查，停止时丢弃结果
+      if (controller.signal.aborted) {
+        reply = { ...reply, status: 'stopped' }
+      } else {
+        const images: GeneratedImage[] = []
+        const files: db.StoredFile[] = []
+        for (const result of results) {
+          const id = createId()
+          cacheBlob(id, result.blob)
+          files.push({ id, blob: result.blob })
+          images.push({
+            id,
+            mimeType: result.mimeType,
+            prompt,
+            model: options.model,
+            ...(result.revisedPrompt ? { revisedPrompt: result.revisedPrompt } : {}),
+            createdAt: Date.now(),
+          })
+        }
+        pendingFiles.set(targetId, [
+          ...(pendingFiles.get(targetId) ?? []),
+          ...files.map(({ id, blob }) => ({ id, blob })),
+        ])
+        reply = { ...reply, images, status: 'done' }
+      }
+    } catch (error) {
+      reply = controller.signal.aborted
+        ? { ...reply, status: 'stopped' }
+        : {
+            ...reply,
+            status: 'error',
+            error: {
+              kind: 'protocol',
+              message: error instanceof Error ? error.message : String(error),
+            },
+          }
+    } finally {
+      updateReply(targetId, reply)
+      set((state) => ({
+        streaming: Object.fromEntries(
+          Object.entries(state.streaming).filter(([id]) => id !== targetId)
+        ),
+      }))
+      persist(targetId)
+    }
+  })()
+  return true
 }

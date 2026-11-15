@@ -1,13 +1,13 @@
 import type { TranslationMessage } from '../../i18n/index.js'
 import type { ApiErrorKind } from '../api/client.js'
 import type {
-  ChatModel,
   MessageUsage,
   ServerToolBlock,
   StopDetails,
   StopReason,
   TextCitation,
 } from '../api/types.js'
+import type { GeneratedImage } from '../providers/types.js'
 
 /**
  * 消息附件。id 是本地标识（IndexedDB files 表的主键，原件按它存储，所有引用同一 id 的消息共用一份），
@@ -76,7 +76,11 @@ export type AssistantMessage = MessageBranch & {
   role: 'assistant'
   createdAt: number
   /** 未记录模型时为 null，续写使用当前默认模型。 */
-  model: ChatModel | null
+  model: string | null
+  /** 发送时使用的供应商；旧消息缺省表示 DeepSeek 默认供应商。 */
+  providerId?: string | null
+  /** 本条消息由生图产生时的图片结果 */
+  images?: GeneratedImage[]
   /** 请求时是否开启深度思考 */
   thinking?: boolean
   /** 请求时是否声明 deepseek_web_search；关闭时仍声明 deepseek_read_url */

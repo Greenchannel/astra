@@ -3,6 +3,8 @@
 export const MANIFEST_PATH = 'manifest.json'
 export const USER_PATH = 'user.json'
 export const INDEX_PATH = 'chat_session_index.json'
+/** 格式 v4 起的可选全局记忆条目 */
+export const MEMORY_PATH = 'memory.json'
 
 export const sessionPath = (sessionId: string) => `chat_sessions/${sessionId}.json`
 

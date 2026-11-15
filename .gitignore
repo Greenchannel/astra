@@ -9,3 +9,7 @@ build/
 .env.*
 !.env.example
 tmp/
+src-tauri/target/
+src-tauri/gen/
+src-tauri/icons/*
+!src-tauri/icons/source.png

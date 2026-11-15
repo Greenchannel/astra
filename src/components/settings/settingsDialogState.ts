@@ -1,10 +1,10 @@
 import { create } from 'zustand'
-import { useSettings } from '../../services/settings.js'
+import { getChatProvider } from '../../services/providers/store.js'
 
-/** 设置弹窗的分组：通用设置 / 数据管理 */
-export type SettingsSection = 'general' | 'data'
+/** 设置弹窗的分组：通用设置 / 供应商 / 记忆 / 数据管理 */
+export type SettingsSection = 'general' | 'providers' | 'memory' | 'data'
 
-/** 设置弹窗：侧边栏底部、没有 API Key 时的操作与 401 提示都可以打开；section 为打开时选中的分组 */
+/** 设置弹窗：侧边栏底部、没有可用供应商时的操作与 401 提示都可以打开；section 为打开时选中的分组 */
 export const useSettingsDialog = create(() => ({
   open: false,
   section: 'general' as SettingsSection,
@@ -15,11 +15,11 @@ export const openSettings = (section: SettingsSection) =>
 
 export const closeSettings = () => useSettingsDialog.setState({ open: false })
 
-/** 没有 API Key 时打开设置并选中 API Key 所在的「数据管理」，返回是否已有 Key */
-export const ensureApiKey = () => {
-  if (useSettings.getState().apiKey) {
+/** 没有可用供应商（未配置或未选模型）时打开供应商设置，返回是否已经可用 */
+export const ensureProvider = () => {
+  if (getChatProvider()) {
     return true
   }
-  openSettings('data')
+  openSettings('providers')
   return false
 }

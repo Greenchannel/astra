@@ -1,7 +1,15 @@
 import * as db from '../db.js'
+import type { MemoryItem } from '../../memory/types.js'
 import { BackupError, fail } from './errors.js'
 import type { SessionIndexEntry } from './format.js'
-import { INDEX_PATH, MANIFEST_PATH, USER_PATH, parseSessionPath, sessionFilesDir } from './paths.js'
+import {
+  INDEX_PATH,
+  MANIFEST_PATH,
+  MEMORY_PATH,
+  USER_PATH,
+  parseSessionPath,
+  sessionFilesDir,
+} from './paths.js'
 import { checkManifest, readSessionFile, readSessionIndex } from './schema.js'
 import { toLocalSession } from './toLocal.js'
 import {
@@ -50,6 +58,46 @@ const readJson = async (entry: ArchiveEntry): Promise<unknown> => {
   }
 }
 
+const readMemories = (value: unknown): MemoryItem[] => {
+  if (!Array.isArray(value)) {
+    return fail('backupIncomplete')
+  }
+  return value.map((item): MemoryItem => {
+    if (typeof item !== 'object' || item === null) {
+      return fail('backupIncomplete')
+    }
+    const record = item as Record<string, unknown>
+    if (
+      typeof record.id !== 'string' ||
+      typeof record.content !== 'string' ||
+      (record.source !== 'manual' && record.source !== 'auto') ||
+      typeof record.enabled !== 'boolean' ||
+      typeof record.createdAt !== 'number' ||
+      typeof record.updatedAt !== 'number'
+    ) {
+      return fail('backupIncomplete')
+    }
+    return {
+      id: record.id,
+      content: record.content,
+      source: record.source,
+      enabled: record.enabled,
+      createdAt: record.createdAt,
+      updatedAt: record.updatedAt,
+      ...(typeof record.sessionId === 'string' ? { sessionId: record.sessionId } : {}),
+    }
+  })
+}
+
+let importedMemories: MemoryItem[] | undefined
+
+/** 导入成功后取出本次归档里的记忆；没有 memory.json（v3 归档）时返回 undefined */
+export const takeImportedMemories = (): MemoryItem[] | undefined => {
+  const value = importedMemories
+  importedMemories = undefined
+  return value
+}
+
 /**
  * 检查 ZIP 格式、首个 manifest 条目及格式版本。
  * 校验失败时保留正在生成的回答和现有暂存数据。
@@ -79,6 +127,7 @@ export const checkArchiveFormat = async (file: File): Promise<void> => {
  * 写入导入暂存存储；调用方负责先清空暂存，成功后替换正式数据，失败时清理暂存。
  */
 export const importArchive = async (file: File): Promise<void> => {
+  importedMemories = undefined
   if (!(await isZipFile(file))) {
     fail('backupUnrecognized')
   }
@@ -127,6 +176,8 @@ export const importArchive = async (file: File): Promise<void> => {
         await db.addStagingSession(local.session)
       } else if (path === INDEX_PATH && !index) {
         index = readSessionIndex(await readJson(entry))
+      } else if (path === MEMORY_PATH && importedMemories === undefined) {
+        importedMemories = readMemories(await readJson(entry))
       } else if (
         index
           ? imported.has(/^chat_sessions\/([^/]+)_files\//.exec(path)?.[1] ?? '')

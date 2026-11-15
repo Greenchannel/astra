@@ -12,6 +12,7 @@ import type {
   Session,
   UserMessage,
 } from '../types.js'
+import type { GeneratedImage } from '../../providers/types.js'
 import { fail } from './errors.js'
 import type { ChatMessage, FileEntry, Fragment, SessionFile } from './format.js'
 import { sessionFilesDir } from './paths.js'
@@ -220,6 +221,18 @@ const toAssistant = (message: ChatMessage): AssistantMessage => {
   const id = String(message.id)
   const blocks = toBlocks(message.fragments, id)
   const refused = message.status === 'CONTENT_FILTER'
+  const images: GeneratedImage[] = message.fragments.flatMap((item) =>
+    item.type === 'GENERATED_IMAGE'
+      ? item.images.map((entry) => ({
+          id: entry.id,
+          mimeType: entry.mime_type,
+          prompt: entry.prompt,
+          model: entry.model,
+          ...(entry.revised_prompt ? { revisedPrompt: entry.revised_prompt } : {}),
+          createdAt: time(entry.inserted_at),
+        }))
+      : []
+  )
   return {
     id,
     role: 'assistant',
@@ -231,6 +244,7 @@ const toAssistant = (message: ChatMessage): AssistantMessage => {
     status: replyStatus[message.status],
     // 拒绝回复丢弃模型正文和思考，保留模板提示与工具步骤。
     ...(refused ? { stopReason: 'refusal' as const } : {}),
+    ...(images.length > 0 ? { images } : {}),
     blocks: refused
       ? blocks.filter(
           (block) => block.type !== 'thinking' && (block.type !== 'text' || block.isTemplate)
@@ -289,28 +303,30 @@ export const toLocalSession = (file: SessionFile): LocalSession => {
     ...buildTree(file),
   }
   const images = new Map<string, string>()
+  const registerImage = (exportPath: string | null, id: string) => {
+    // 读取端把条目名规范为 NFC，引用也按同样规则比较。
+    const path = exportPath?.normalize('NFC')
+    if (path === undefined) {
+      return
+    }
+    // 图片只能在本会话目录下，同一条目不能对应不同文件。
+    if (!path.startsWith(sessionFilesDir(file.id)) || (images.get(path) ?? id) !== id) {
+      fail('backupInvalidFiles')
+    }
+    images.set(path, id)
+  }
   for (const message of file.messages) {
     for (const item of message.fragments) {
-      if (item.type !== 'FILE') {
-        continue
-      }
-      for (const entry of item.files) {
-        if (!entry.is_image) {
-          continue
+      if (item.type === 'FILE') {
+        for (const entry of item.files) {
+          if (entry.is_image) {
+            registerImage(entry.export_path, entry.id)
+          }
         }
-        // 读取端把条目名规范为 NFC，引用也按同样规则比较。
-        const path = entry.export_path?.normalize('NFC')
-        if (path === undefined) {
-          continue
+      } else if (item.type === 'GENERATED_IMAGE') {
+        for (const entry of item.images) {
+          registerImage(entry.export_path, entry.id)
         }
-        // 图片只能在本会话目录下，同一条目不能对应不同文件。
-        if (
-          !path.startsWith(sessionFilesDir(file.id)) ||
-          (images.get(path) ?? entry.id) !== entry.id
-        ) {
-          fail('backupInvalidFiles')
-        }
-        images.set(path, entry.id)
       }
     }
   }

@@ -1,75 +1,79 @@
-# chat-demo
+# Astra
 
 English | [简体中文](README.zh-CN.md)
 
-A static chat demo powered by the DeepSeek API. No application backend is required: the browser connects directly to the configured API service.
-
-You can [try the app online](https://deepseek-ai.github.io/chat-demo/) or download the archive from [Releases](https://github.com/deepseek-ai/deepseek-chat-demo/releases), extract it, and double-click `index.html` to use it locally without installation or a build. Enter your API key in Settings before your first chat.
-
-## Getting started
-
-Install Node.js 22.12+ and pnpm, then run:
-
-```sh
-git clone https://github.com/deepseek-ai/chat-demo.git
-cd chat-demo
-pnpm install
-pnpm dev
-```
-
-Open http://localhost:8090.
-
-To build the static site:
-
-```sh
-pnpm build
-```
-
-The output is written to `dist/`. Deploy it to a static web server or open `dist/index.html` directly. Opening the file directly requires browser support for storage on `file://` pages and an API service that permits their cross-origin requests.
+Astra is a multi-provider AI chat client built on the original `chat-demo` frontend and packaged with **Tauri 2** for Android phones/tablets, Windows, and Linux. iOS is not supported.
 
 ## Features
 
-- Multiple conversations with automatic titles, renaming, and deletion; edit prompts, regenerate replies, and switch between message branches.
-- Streaming replies, deep thinking, smart search, link reading, and source citations; stop generation or continue eligible replies.
-- Upload, paste, or drag and drop attachments; use voice input and read replies aloud. A live audio spectrum appears in the first row of the input area while recording on mobile.
-- Markdown, syntax highlighting, KaTeX math, and Mermaid diagrams.
-- Simplified Chinese and English, light and dark themes, mobile layouts, location settings, and chat history import and export.
+- **Multiple providers**: built-in presets for DeepSeek, OpenAI, Anthropic, OpenRouter, Gemini, xAI, Groq, Mistral, Together, SiliconFlow, Moonshot Kimi, Zhipu, Alibaba DashScope, Volcengine Ark, MiniMax, Baidu Qianfan, Tencent Hunyuan, Ollama, and LM Studio, plus custom OpenAI-compatible endpoints.
+- **Model detection**: fetch a provider's model list, classify chat/image models, and run a minimal chat test.
+- **Global model switcher**: the input-area menu groups models by provider; selecting a model switches to that provider automatically.
+- **Custom system prompt**: one global prompt, falling back to the provider default; one-click reset.
+- **Long-term memory**: global memory with manual add/edit/delete, enable/disable, and automatic extraction after replies. Memory is injected into the system prompt.
+- **Image generation**: OpenAI-compatible `/images/generations`, with in-chat images, viewing, saving, and regeneration.
+- **Native networking**: the Tauri app uses Rust `reqwest`, bypassing WebView CORS and providing true SSE streaming.
+- Existing features are preserved: message branches, edit/regenerate, Markdown/KaTeX/Mermaid, voice input and read-aloud, and history import/export.
 
-## Data and storage
+## Builds
 
-Your API key and settings are stored in the browser's localStorage. Conversations and original attachments are stored in IndexedDB. Local data is isolated by browser profile and site origin. Sending messages, uploading attachments, and using speech features sends the relevant content to the configured API service.
+All installers are produced by GitHub Actions; no local packaging is required:
 
-History import and export in Settings use ZIP archives. After confirmation and successful validation, importing replaces all local conversations and attachments. Exports include conversations and locally available original images, but exclude API keys, settings, and original non-image attachments. See the [history import/export documentation (Chinese)](src/services/chat/history/README.md) for the archive format and preservation details.
+- `.github/workflows/ci.yml`: typecheck, lint, web build, and `cargo check` on pushes/PRs.
+- `.github/workflows/release.yml`: on a `v*` tag or manual dispatch, produces:
+  - Android (arm64, debug-signed APK that installs directly)
+  - Windows (NSIS + MSI)
+  - Linux (AppImage + deb)
 
-Settings → Data → Delete all chats clears all local conversations, original attachments, and unsent drafts after confirmation. It stops ongoing replies and returns to a new chat. Your API key and settings are preserved; files already uploaded to the API service are not deleted.
+The current `origin` points to upstream `deepseek-ai/chat-demo`; push to your own GitHub repository before running Actions.
 
-## Development
+### Local development (optional)
 
-| Command       | Description                  |
-| ------------- | ---------------------------- |
-| `pnpm dev`    | Start the development server |
-| `pnpm build`  | Build into `dist/`           |
-| `pnpm type`   | Run TypeScript type checks   |
-| `pnpm lint`   | Lint with oxlint             |
-| `pnpm format` | Format with oxfmt            |
+```sh
+pnpm install
+pnpm icons        # generate platform icons
+pnpm tauri dev    # desktop development; the web version still works with pnpm dev
+pnpm build        # web-only static bundle in dist/
+pnpm tauri build  # desktop installers
+```
 
-[rspack.config.ts](rspack.config.ts) uses `https://api.deepseek.com` by default. Use `createConfig({ apiOrigin, devServer })` to customize the API origin and development server proxy.
+Android builds locally require the Android SDK/NDK and Rust Android targets. CI is already configured, so local packaging is unnecessary.
 
-Chat uses `deepseek-flash` by default through Anthropic-compatible Messages / Files APIs. Speech features use ASR / TTS endpoints. Requests include extensions for search, link reading, titles, and `latest_reminder`, so the configured service must support the corresponding capabilities. Supported attachment formats are determined by server-side validation.
+## Providers and models
+
+Open **Settings → Providers**, add a provider from a preset, enter your own API key, click **Detect models**, and choose a chat model (and an image model for image-generation providers). Presets contain connection details only — no API keys are bundled — and every field is editable.
+
+- API keys are required for DeepSeek, OpenAI, Anthropic, and most commercial services.
+- Ollama / LM Studio do not require a key by default. On Android, replace `localhost` with your computer's LAN IP and make sure both devices are on the same network.
+- The DeepSeek provider preserves the original extensions: deep thinking, web search, server-side titles, speech input/read-aloud, and Files API attachments.
+- OpenAI/Anthropic providers support inline image attachments only; use DeepSeek for document attachments.
+- Provider base URLs may change; edit them directly in the provider editor if needed.
+
+## Data and privacy
+
+- Provider configuration and API keys are stored in local `localStorage` (`chat-demo:providers`).
+- Chats, original attachments, generated images, and memories are stored in IndexedDB (database `chat-demo`).
+- Chat, memory extraction, and image-generation requests are sent only to the selected provider.
+- History export ZIPs (format v4) include chats, local images, generated images, and `memory.json`; they **exclude** API keys, provider configuration, and the system prompt.
+- Import replaces chats; if the archive contains `memory.json`, memories are replaced too. Older v3 archives have no memory file, so existing memories are kept.
+- “Delete all chats” keeps settings and memories. Memories can be cleared separately under **Settings → Memory**.
+
+## Project structure
 
 ```text
 src/
-  app/                 Application layout, themes, and global styles
-  components/          Chat, settings, Markdown, and other UI components
-  i18n/                English and Chinese translations
+  app/                 App shell, theme, viewport
+  components/          Chat, settings, Markdown, provider/memory/image UI
   services/
-    api/               API requests, SSE, and protocol types
-    chat/              Conversations, message branches, storage, and history import/export
-    markdown/          Markdown parsing, syntax highlighting, and diagrams
-    speech/            Audio recording and read-aloud playback
-  utils/               Shared utilities
+    api/               HTTP/SSE transport, DeepSeek protocol, speech, errors
+    providers/         Presets, adapters, model detection, system prompt
+    memory/            Memory store, prompt injection, auto extraction
+    imagegen/          OpenAI-compatible image generation
+    chat/              Sessions, branches, storage, history import/export
+    speech/            Recording and read-aloud
+src-tauri/             Tauri 2 project and Rust native HTTP/SSE commands
 ```
 
 ## License
 
-[MIT](LICENSE). The build copies the license to `dist/LICENSE`; include it when distributing the app. Third-party dependencies are subject to their own licenses.
+[MIT](LICENSE). The upstream `deepseek-ai/chat-demo` is also MIT-licensed; third-party dependencies follow their own licenses.

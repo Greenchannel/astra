@@ -1,4 +1,5 @@
 import { formatDate } from '../../utils/format.js'
+import { replaceMemoryItems, useMemory } from '../memory/store.js'
 import * as db from './db.js'
 import { replaceHistory, useChatStore } from './store.js'
 import type { Session } from './types.js'
@@ -35,7 +36,7 @@ export const exportHistory = (): Promise<{ name: string; blob: Blob }> =>
     }
     const { exportArchive } = await import('./history/exportArchive.js')
     const now = new Date()
-    const blob = await exportArchive(readSessions())
+    const blob = await exportArchive(readSessions(), useMemory.getState().items)
     return { name: backupFileName(now), blob }
   })
 
@@ -45,9 +46,17 @@ export const exportHistory = (): Promise<{ name: string; blob: Blob }> =>
  */
 export const importHistory = (file: File): Promise<number> =>
   enqueueBackup(async () => {
-    const { checkArchiveFormat, importArchive } = await import('./history/importArchive.js')
+    const { checkArchiveFormat, importArchive, takeImportedMemories } = await import(
+      './history/importArchive.js'
+    )
     await checkArchiveFormat(file)
-    return replaceHistory(() => importArchive(file))
+    const count = await replaceHistory(() => importArchive(file))
+    // v4 归档带 memory.json；v3 归档没有，保留现有记忆
+    const memories = takeImportedMemories()
+    if (memories) {
+      replaceMemoryItems(memories)
+    }
+    return count
   })
 
 /** 确认删除后调用：以空历史原子替换全部本地会话与附件，保留 API Key 和其他设置。 */

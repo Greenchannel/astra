@@ -7,8 +7,9 @@ export type Locale = 'zh-CN' | 'en-US'
 /** 主题偏好；默认跟随系统 */
 export type ThemePreference = 'light' | 'dark' | 'system'
 
-/** 本机设置，存 localStorage：API Key、语言、主题、位置、朗读音色、深度思考与智能搜索开关、侧边栏收起状态 */
+/** 本机设置，存 localStorage：语言、主题、位置、朗读音色、深度思考与智能搜索开关、系统提示词、记忆自动提取 */
 type Settings = {
+  /** 旧版的 DeepSeek Key；首次启动会迁移为默认供应商，保留字段用于兼容 */
   apiKey: string | null
   locale: Locale
   themePreference: ThemePreference
@@ -17,6 +18,10 @@ type Settings = {
   thinking: boolean
   search: boolean
   siderCollapsed: boolean
+  /** 自定义 system prompt；null 表示使用当前供应商默认值 */
+  systemPrompt: string | null
+  /** 聊天结束后自动提取记忆 */
+  memoryAutoExtract: boolean
 }
 
 const KEYS = {
@@ -28,6 +33,8 @@ const KEYS = {
   thinking: 'chat-demo:thinking',
   search: 'chat-demo:search',
   siderCollapsed: 'chat-demo:sider-collapsed',
+  systemPrompt: 'chat-demo:system-prompt',
+  memoryAutoExtract: 'chat-demo:memory-auto-extract',
 } as const
 
 const read = (key: string) => {
@@ -87,6 +94,11 @@ const initialThemePreference = (): ThemePreference => {
 /** 未保存过时使用服务端默认音色 stella（海星） */
 const initialTtsVoice = (): TtsVoice => (read(KEYS.ttsVoice) === 'tide' ? 'tide' : 'stella')
 
+const initialSystemPrompt = (): string | null => {
+  const saved = read(KEYS.systemPrompt)
+  return saved && saved.trim() ? saved : null
+}
+
 export const useSettings = create<Settings>(() => ({
   apiKey: read(KEYS.apiKey),
   locale: initialLocale(),
@@ -96,6 +108,9 @@ export const useSettings = create<Settings>(() => ({
   thinking: read(KEYS.thinking) === 'true',
   search: read(KEYS.search) === 'true',
   siderCollapsed: read(KEYS.siderCollapsed) === 'true',
+  systemPrompt: initialSystemPrompt(),
+  // 默认开启；用户明确关闭过才为 false
+  memoryAutoExtract: read(KEYS.memoryAutoExtract) !== 'false',
 }))
 
 export const setLocale = (locale: Locale) => {
@@ -137,4 +152,16 @@ export const setSearch = (search: boolean) => {
 export const setSiderCollapsed = (siderCollapsed: boolean) => {
   write(KEYS.siderCollapsed, String(siderCollapsed))
   useSettings.setState({ siderCollapsed })
+}
+
+/** 空字符串表示恢复供应商默认提示词 */
+export const setSystemPrompt = (systemPrompt: string | null) => {
+  const value = systemPrompt?.trim() ? systemPrompt : null
+  write(KEYS.systemPrompt, value)
+  useSettings.setState({ systemPrompt: value })
+}
+
+export const setMemoryAutoExtract = (memoryAutoExtract: boolean) => {
+  write(KEYS.memoryAutoExtract, String(memoryAutoExtract))
+  useSettings.setState({ memoryAutoExtract })
 }

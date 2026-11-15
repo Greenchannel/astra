@@ -1,6 +1,7 @@
 import { translate, type TranslationMessage } from '../../i18n/index.js'
 import { readMessageEvent } from './parseEvent.js'
 import { readServerSentEvents } from './sse.js'
+import { httpRequest, httpStream, type HttpInit, type ResponseLike } from './transport.js'
 import type {
   ApiErrorBody,
   CreateMessageRequest,
@@ -9,12 +10,20 @@ import type {
   MessageStreamEvent,
 } from './types.js'
 
-/** 构建期 API 地址，默认 https://api.deepseek.com；本地开发支持开发服务器代理 */
+/** 构建期默认 API 地址，默认 https://api.deepseek.com；运行时应使用供应商配置 */
 export const API_ORIGIN = __API_ORIGIN__
 /** Anthropic 兼容接口的前缀 */
-const ANTHROPIC_BASE_URL = `${API_ORIGIN}/anthropic/v1`
+export const ANTHROPIC_BASE_URL = `${API_ORIGIN}/anthropic/v1`
 /** 引用 Files API 上传的图片、调用 Anthropic 兼容 Files API 时必须携带 */
 const FILES_BETA = 'files-api-2025-04-14'
+
+export type ApiEndpoint = {
+  baseUrl: string
+  apiKey: string
+}
+
+export const joinUrl = (baseUrl: string, path: string) =>
+  `${baseUrl.trim().replace(/\/+$/, '')}/${path.replace(/^\/+/, '')}`
 
 export type ApiErrorKind =
   /** 非 2xx 响应 */
@@ -49,7 +58,7 @@ const isErrorBody = (value: unknown): value is ApiErrorBody =>
   typeof (value as ApiErrorBody).error?.message === 'string'
 
 const readErrorResponse = async (
-  response: Response,
+  response: ResponseLike,
   kind: 'http' | 'protocol' = 'http',
   fallback = response.statusText
 ): Promise<ApiError> => {
@@ -66,10 +75,27 @@ const readErrorResponse = async (
   return new ApiError(kind, message, response.status)
 }
 
-export const request = async (url: string, init: RequestInit): Promise<Response> => {
-  let response: Response
+export const request = async (url: string, init: HttpInit): Promise<ResponseLike> => {
+  let response: ResponseLike
   try {
-    response = await fetch(url, init)
+    response = await httpRequest(url, init)
+  } catch (error) {
+    if (init.signal?.aborted) {
+      throw error
+    }
+    throw new ApiError('network', error instanceof Error ? error.message : String(error))
+  }
+  if (!response.ok) {
+    throw await readErrorResponse(response)
+  }
+  return response
+}
+
+/** 流式请求：Tauri 端由 Rust 边收边推，Web 端读取 fetch 响应流 */
+export const requestStream = async (url: string, init: HttpInit): Promise<ResponseLike> => {
+  let response: ResponseLike
+  try {
+    response = await httpStream(url, init)
   } catch (error) {
     if (init.signal?.aborted) {
       throw error
@@ -91,7 +117,7 @@ const anthropicHeaders = (apiKey: string, beta: boolean): Record<string, string>
 
 /** 用 GET /models 校验 API Key（不产生费用） */
 export const verifyApiKey = async (apiKey: string, signal?: AbortSignal): Promise<void> => {
-  await request(`${API_ORIGIN}/models`, {
+  await request(joinUrl(API_ORIGIN, 'models'), {
     method: 'GET',
     headers: { Authorization: `Bearer ${apiKey}` },
     signal,
@@ -103,7 +129,7 @@ export const verifyApiKey = async (apiKey: string, signal?: AbortSignal): Promis
  * purpose 为 null 时不传该字段（图片）；purpose 必须排在 file 之前。
  */
 export const uploadFile = async (
-  apiKey: string,
+  endpoint: ApiEndpoint,
   file: File,
   purpose: FilePurpose | null,
   signal?: AbortSignal
@@ -113,9 +139,9 @@ export const uploadFile = async (
     form.append('purpose', purpose)
   }
   form.append('file', file)
-  const response = await request(`${ANTHROPIC_BASE_URL}/files`, {
+  const response = await request(joinUrl(endpoint.baseUrl, 'anthropic/v1/files'), {
     method: 'POST',
-    headers: anthropicHeaders(apiKey, true),
+    headers: anthropicHeaders(endpoint.apiKey, true),
     body: form,
     signal,
   })
@@ -123,11 +149,14 @@ export const uploadFile = async (
 }
 
 /** DELETE /anthropic/v1/files/{file_id} */
-export const deleteFile = async (apiKey: string, fileId: string): Promise<void> => {
-  await request(`${ANTHROPIC_BASE_URL}/files/${encodeURIComponent(fileId)}`, {
-    method: 'DELETE',
-    headers: anthropicHeaders(apiKey, true),
-  })
+export const deleteFile = async (endpoint: ApiEndpoint, fileId: string): Promise<void> => {
+  await request(
+    joinUrl(endpoint.baseUrl, `anthropic/v1/files/${encodeURIComponent(fileId)}`),
+    {
+      method: 'DELETE',
+      headers: anthropicHeaders(endpoint.apiKey, true),
+    }
+  )
 }
 
 const hasFile = (body: CreateMessageRequest) =>
@@ -142,14 +171,14 @@ const hasFile = (body: CreateMessageRequest) =>
  * ping、保活注释与无法解析的内容不产出；中止请求时抛出 signal 的 AbortError。
  */
 export async function* streamMessage(
-  apiKey: string,
+  endpoint: ApiEndpoint,
   body: CreateMessageRequest,
   signal: AbortSignal
 ): AsyncGenerator<MessageStreamEvent> {
-  const response = await request(`${ANTHROPIC_BASE_URL}/messages`, {
+  const response = await requestStream(joinUrl(endpoint.baseUrl, 'anthropic/v1/messages'), {
     method: 'POST',
     headers: {
-      ...anthropicHeaders(apiKey, hasFile(body)),
+      ...anthropicHeaders(endpoint.apiKey, hasFile(body)),
       'Content-Type': 'application/json',
       Accept: 'text/event-stream',
     },
