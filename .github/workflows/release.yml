@@ -143,9 +143,6 @@ jobs:
       - name: Install dependencies
         run: pnpm install --frozen-lockfile
 
-      - name: Generate icons
-        run: pnpm icons
-
       - name: Build web bundle
         run: pnpm build
 
@@ -153,6 +150,14 @@ jobs:
         run: pnpm tauri android init --ci --skip-targets-install
         env:
           CI: true
+
+      # tauri android init 会用模板默认图标重建 gen/android，必须在 init 之后再生成图标
+      - name: Generate Android launcher icons
+        run: pnpm icons
+
+      - name: Verify Android launcher icon
+        run: |
+          cmp src-tauri/icons/android/mipmap-xxxhdpi/ic_launcher.png               src-tauri/gen/android/app/src/main/res/mipmap-xxxhdpi/ic_launcher.png
 
       - name: Patch Android manifest
         run: node scripts/patch-android.mjs
