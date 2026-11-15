@@ -1,6 +1,6 @@
 {
   "name": "astra",
-  "version": "0.2.0",
+  "version": "0.2.1",
   "description": "Astra — 多供应商 AI 聊天客户端（Android / Windows / Linux）。",
   "license": "MIT",
   "private": true,
