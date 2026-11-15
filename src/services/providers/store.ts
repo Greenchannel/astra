@@ -1,6 +1,6 @@
 import { create } from 'zustand'
 import { createId } from '../../utils/id.js'
-import { getPreset } from './presets.js'
+import { deepseekCapabilities, getPreset } from './presets.js'
 import type {
   ChatProvider,
   ProviderConfig,
@@ -60,6 +60,36 @@ const readModels = (value: unknown): ProviderModel[] => {
   })
 }
 
+/**
+ * 官方 DeepSeek 的 OpenAI 兼容地址不支持思考开关/联网/自动标题。
+ * 读到这种配置时自动转成原生协议，避免用户误用后功能全部失效。
+ */
+const migrateDeepSeek = (provider: ProviderConfig): ProviderConfig => {
+  if (!/api\.deepseek\.com/i.test(provider.baseUrl)) {
+    return provider
+  }
+  if (provider.kind === 'deepseek') {
+    return provider.baseUrl.replace(/\/+$/, '') === 'https://api.deepseek.com'
+      ? provider
+      : { ...provider, baseUrl: 'https://api.deepseek.com' }
+  }
+  if (provider.kind === 'openai') {
+    return {
+      ...provider,
+      kind: 'deepseek',
+      baseUrl: 'https://api.deepseek.com',
+      chatModel: 'deepseek-flash',
+      presetId: 'deepseek',
+      docsUrl: provider.docsUrl ?? 'https://platform.deepseek.com/api_keys',
+      capabilities: {
+        ...deepseekCapabilities,
+        images: provider.capabilities.images,
+      },
+    }
+  }
+  return provider
+}
+
 const readProvider = (value: unknown): ProviderConfig | null => {
   if (!isRecord(value) || typeof value.id !== 'string' || typeof value.kind !== 'string') {
     return null
@@ -80,7 +110,7 @@ const readProvider = (value: unknown): ProviderConfig | null => {
   }
   const flag = (key: 'thinking' | 'search' | 'title' | 'speech' | 'images' | 'requiresApiKey') =>
     typeof capabilities[key] === 'boolean' ? (capabilities[key] as boolean) : base[key]
-  return {
+  const provider: ProviderConfig = {
     id: value.id,
     name: typeof value.name === 'string' && value.name ? value.name : 'Provider',
     kind: value.kind,
@@ -110,6 +140,7 @@ const readProvider = (value: unknown): ProviderConfig | null => {
     createdAt: typeof value.createdAt === 'number' ? value.createdAt : Date.now(),
     updatedAt: typeof value.updatedAt === 'number' ? value.updatedAt : Date.now(),
   }
+  return migrateDeepSeek(provider)
 }
 
 export const createProviderFromPreset = (
@@ -188,6 +219,10 @@ const persistActive = (activeId: string | null) => {
   write(KEYS.active, activeId)
 }
 
+// 启动时把旧配置（如 DeepSeek 的 OpenAI 兼容地址）迁移结果写回，避免每次加载重复迁移
+persistProviders(initial)
+persistActive(initialActiveId(initial))
+
 const setProviders = (
   update: (providers: ProviderConfig[]) => ProviderConfig[],
   nextActiveId?: string | null
@@ -213,7 +248,9 @@ export const addProvider = (preset: ProviderPreset, apiKey = ''): string => {
 export const updateProvider = (id: string, patch: Partial<ProviderConfig>) => {
   setProviders((providers) =>
     providers.map((provider) =>
-      provider.id === id ? { ...provider, ...patch, updatedAt: Date.now() } : provider
+      provider.id === id
+        ? migrateDeepSeek({ ...provider, ...patch, updatedAt: Date.now() })
+        : provider
     )
   )
 }

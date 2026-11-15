@@ -62,6 +62,13 @@
   letter-spacing: 0.03em;
 }
 
+.tip {
+  padding: 0 8px 5px;
+  color: var(--dsw-alias-label-tertiary);
+  font-size: 11px;
+  line-height: 16px;
+}
+
 .option {
   display: flex;
   align-items: center;

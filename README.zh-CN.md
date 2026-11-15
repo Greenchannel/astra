@@ -46,6 +46,8 @@ Android 本地构建需要 Android SDK、NDK 与 Rust Android targets；CI 已�
 - 需要 API Key 的供应商：DeepSeek、OpenAI、Anthropic 及大多数商业服务。
 - Ollama / LM Studio 默认不需要 Key；在 Android 上请把 `localhost` 换成电脑的局域网 IP，并确保同一网络。
 - DeepSeek 供应商保留原版扩展能力：深度思考、联网搜索、服务端标题、语音输入/朗读、Files API 附件。
+- **官方 DeepSeek 请使用 DeepSeek 原生预设**，不要用 `https://api.deepseek.com/v1` 的 OpenAI 兼容地址；后者不支持思考开关、联网搜索和自动标题。App 会在读取到该地址时自动转为原生协议。
+- 官方联网搜索与自动标题仅支持 `deepseek-flash`（V4.1 Flash）；其他模型可能始终思考且没有联网/服务端标题，模型菜单中会给出提示。
 - OpenAI/Anthropic 供应商只支持内联图片附件；文档附件请使用 DeepSeek 供应商。
 - 供应商接口地址可能随官方调整，遇到问题时可在编辑页直接修改 base URL。
 

@@ -51,6 +51,9 @@ const FILE_RETRY_BASE_DELAY = 1000
 /** 允许自动补标题的请求；手动重命名后取消本轮标题写入，包含主动清空标题的情况。 */
 const titleRequests = new Set<AbortController>()
 
+/** 本地兜底标题：服务端标题返回后可以覆盖，用户手动重命名后不再覆盖。 */
+const provisionalTitles = new Map<string, string>()
+
 /** 不支持服务端标题的供应商，用首条消息本地截断作为标题 */
 const localTitle = (text: string) => {
   const cleaned = text.replace(/\s+/g, ' ').trim()
@@ -1012,6 +1015,13 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
   }
   streamFlushes.set(sessionId, flush)
 
+  // 新会话先使用用户消息的本地标题，服务端标题返回后可覆盖；模型不支持标题时也不会一直空着
+  const provisionalTitle = localTitle(request.question.content)
+  if (provisionalTitle) {
+    setTitleIfEmpty(sessionId, provisionalTitle)
+    provisionalTitles.set(sessionId, provisionalTitle)
+  }
+
   try {
     if (!providerUsable(provider)) {
       reply = settleReply(reply, 'error', Date.now(), {
@@ -1039,9 +1049,6 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
           reply = { ...reply, latestReminder }
           updateReply(sessionId, reply)
           persist(sessionId)
-          if (!provider.capabilities.title) {
-            setTitleIfEmpty(sessionId, localTitle(prepared.question.content))
-          }
           const events = getAdapter(provider.kind).stream(
             provider,
             {
@@ -1069,8 +1076,11 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
               !get().importingHistory
             ) {
               const title = event.delta.title.trim()
+              const provisional = provisionalTitles.get(sessionId)
               updateSession(sessionId, (session) =>
-                session.title ? session : { ...session, title }
+                session.title && session.title !== provisional
+                  ? session
+                  : { ...session, title }
               )
               titleRequests.delete(controller)
             }
@@ -1147,8 +1157,12 @@ const streamReply = async (sessionId: string, initial: AssistantMessage, request
     }
   } finally {
     titleRequests.delete(controller)
+    provisionalTitles.delete(sessionId)
     streamFlushes.delete(sessionId)
     cancelAnimationFrame(frame)
+    if (!getSession(sessionId)?.title) {
+      setTitleIfEmpty(sessionId, provisionalTitle)
+    }
     updateReply(sessionId, reply)
     set((state) => ({
       streaming: Object.fromEntries(

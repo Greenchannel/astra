@@ -62,6 +62,9 @@ export const ModelPicker = () => {
                   provider.chatModel ? (
                     <div key={provider.id} className={styles.group}>
                       <div className={styles.groupHeader}>{provider.name}</div>
+                      {provider.kind === 'deepseek' && provider.chatModel !== 'deepseek-flash' ? (
+                        <div className={styles.tip}>{t('modelPickerDeepSeekFlashTip')}</div>
+                      ) : null}
                       <button
                         type="button"
                         role="menuitemradio"

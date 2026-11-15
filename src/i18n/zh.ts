@@ -197,9 +197,19 @@ export const zh = {
   providersApiKey: 'API Key',
   providersGetKey: '获取 API Key',
   providersChatModel: '对话模型',
+  providersImageSection: '生图设置',
   providersImageModel: '生图模型',
   providersImageBaseUrl: '生图 API 地址（可选）',
+  providersImageBaseUrlHint: '留空则使用上面的 API 地址；仅当勾选「支持生图」后生效。',
   providersFiles: '附件方式',
+  providersCapabilitiesHint:
+    '联网搜索、自动标题、语音仅 DeepSeek 原生协议支持；思考开关支持 DeepSeek 与 Anthropic；生图走 OpenAI 兼容接口。',
+  providersDeepSeekOpenAIOpenAIWarning:
+    '这是 DeepSeek 的 OpenAI 兼容地址，无法使用思考开关、联网搜索、自动标题。建议转为 DeepSeek 原生协议。',
+  providersConvertToDeepSeek: '转为 DeepSeek 原生',
+  providersDeepSeekFlashHint:
+    '官方联网搜索与自动标题仅支持 deepseek-flash（V4.1 Flash）；其他模型可能始终思考且没有联网/服务端标题。',
+  providersUseDeepSeekFlash: '改用 deepseek-flash',
   providersDetect: '检测模型',
   providersDetecting: '检测中...',
   providersDetected: '检测到 {count} 个模型',
@@ -219,6 +229,7 @@ export const zh = {
   modelPickerActive: '当前',
   modelPickerEmpty: '还没有可用模型，先到设置里检测模型。',
   modelPickerManage: '管理供应商与模型',
+  modelPickerDeepSeekFlashTip: '联网搜索与自动标题仅 deepseek-flash 支持',
   imageGenOpen: '生成图片',
   imageGenTitle: '生成图片',
   imageGenConfigure: '去配置',

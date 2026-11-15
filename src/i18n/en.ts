@@ -210,9 +210,20 @@ export const en = {
   providersApiKey: 'API Key',
   providersGetKey: 'Get an API key',
   providersChatModel: 'Chat model',
+  providersImageSection: 'Image generation',
   providersImageModel: 'Image model',
   providersImageBaseUrl: 'Image API URL (optional)',
+  providersImageBaseUrlHint:
+    'Leave empty to use the API URL above. Only applies when "Image generation" is enabled.',
   providersFiles: 'Attachments',
+  providersCapabilitiesHint:
+    'Web search, server-side titles, and speech require the native DeepSeek protocol. Thinking works with DeepSeek and Anthropic. Image generation uses OpenAI-compatible endpoints.',
+  providersDeepSeekOpenAIOpenAIWarning:
+    'This is the DeepSeek OpenAI-compatible endpoint, which cannot use the thinking toggle, web search, or server-side titles. Convert it to the native DeepSeek protocol.',
+  providersConvertToDeepSeek: 'Convert to native DeepSeek',
+  providersDeepSeekFlashHint:
+    'Official web search and server-side titles only support deepseek-flash (V4.1 Flash). Other models may always think and have no search/title support.',
+  providersUseDeepSeekFlash: 'Use deepseek-flash',
   providersDetect: 'Detect models',
   providersDetecting: 'Detecting...',
   providersDetected: 'Found {count} models',
@@ -232,6 +243,7 @@ export const en = {
   modelPickerActive: 'Active',
   modelPickerEmpty: 'No models available. Detect models in Settings first.',
   modelPickerManage: 'Manage providers & models',
+  modelPickerDeepSeekFlashTip: 'Web search and auto titles require deepseek-flash',
   imageGenOpen: 'Generate image',
   imageGenTitle: 'Generate image',
   imageGenConfigure: 'Configure',

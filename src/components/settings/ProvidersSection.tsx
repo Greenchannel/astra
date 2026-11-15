@@ -2,7 +2,11 @@ import { useMemo, useState } from 'react'
 import { useTranslate } from '../../i18n/index.js'
 import { openExternal } from '../../services/platform.js'
 import { detectModels, testModel } from '../../services/providers/detect.js'
-import { PROVIDER_PRESETS, getPreset } from '../../services/providers/presets.js'
+import {
+  PROVIDER_PRESETS,
+  deepseekCapabilities,
+  getPreset,
+} from '../../services/providers/presets.js'
 import {
   addProvider,
   removeProvider,
@@ -91,6 +95,39 @@ export const ProvidersSection = () => {
                     ? ` · ${t('providersImageModel')}: ${provider.imageModel}`
                     : ''}
                 </div>
+                {isDeepSeekOpenAI(provider) ? (
+                  <div className={styles.warning}>
+                    <span>{t('providersDeepSeekOpenAIOpenAIWarning')}</span>
+                    <button
+                      type="button"
+                      className={styles.warningAction}
+                      onClick={() => {
+                        updateProvider(provider.id, {
+                          kind: 'deepseek',
+                          baseUrl: 'https://api.deepseek.com',
+                          chatModel: provider.chatModel?.startsWith('deepseek')
+                            ? provider.chatModel
+                            : 'deepseek-flash',
+                          capabilities: { ...deepseekCapabilities },
+                        })
+                      }}
+                    >
+                      {t('providersConvertToDeepSeek')}
+                    </button>
+                  </div>
+                ) : null}
+                {provider.kind === 'deepseek' && provider.chatModel !== 'deepseek-flash' ? (
+                  <div className={styles.warning}>
+                    <span>{t('providersDeepSeekFlashHint')}</span>
+                    <button
+                      type="button"
+                      className={styles.warningAction}
+                      onClick={() => updateProvider(provider.id, { chatModel: 'deepseek-flash' })}
+                    >
+                      {t('providersUseDeepSeekFlash')}
+                    </button>
+                  </div>
+                ) : null}
               </div>
               <div className={styles.cardActions}>
                 <Button
@@ -151,6 +188,9 @@ export const ProvidersSection = () => {
     </div>
   )
 }
+
+const isDeepSeekOpenAI = (provider: ProviderConfig) =>
+  provider.kind === 'openai' && /deepseek\.com/i.test(provider.baseUrl)
 
 const kindName = (kind: ProviderKind) => {
   if (kind === 'deepseek') {
@@ -321,6 +361,21 @@ const ProviderEditor = ({
   }
 
   const save = () => {
+    // 按协议收敛能力，避免在 OpenAI 兼容供应商上勾选只有 DeepSeek 原生协议才支持的能力
+    const capabilities: ProviderCapabilities = {
+      ...draft.capabilities,
+      search: draft.kind === 'deepseek' ? draft.capabilities.search : false,
+      title: draft.kind === 'deepseek' ? draft.capabilities.title : false,
+      speech: draft.kind === 'deepseek' ? draft.capabilities.speech : false,
+      thinking: draft.kind === 'openai' ? false : draft.capabilities.thinking,
+      images: draft.kind === 'anthropic' ? false : draft.capabilities.images,
+      files:
+        draft.kind === 'deepseek'
+          ? 'deepseek'
+          : draft.capabilities.files === 'none'
+            ? 'none'
+            : 'inlineImages',
+    }
     updateProvider(provider.id, {
       name: draft.name.trim() || provider.name,
       kind: draft.kind,
@@ -329,9 +384,22 @@ const ProviderEditor = ({
       chatModel: draft.chatModel.trim() || null,
       imageModel: draft.imageModel.trim() || null,
       imageBaseUrl: draft.imageBaseUrl.trim() || null,
-      capabilities: draft.capabilities,
+      capabilities,
     })
     onClose()
+  }
+
+  const capabilityDisabled = (key: Exclude<keyof ProviderCapabilities, 'files'>) => {
+    if (key === 'search' || key === 'title' || key === 'speech') {
+      return draft.kind !== 'deepseek'
+    }
+    if (key === 'thinking') {
+      return draft.kind === 'openai'
+    }
+    if (key === 'images') {
+      return draft.kind === 'anthropic'
+    }
+    return false
   }
 
   return (
@@ -401,25 +469,27 @@ const ProviderEditor = ({
           </div>
         ) : null}
 
+        <label className={styles.field}>
+          <span>{t('providersChatModel')}</span>
+          <input
+            list={`chat-models-${provider.id}`}
+            value={draft.chatModel}
+            placeholder="model-id"
+            autoCapitalize="off"
+            spellCheck={false}
+            onChange={(event) => patch({ chatModel: event.target.value })}
+          />
+          <datalist id={`chat-models-${provider.id}`}>
+            {chatModels.map((model) => (
+              <option key={model.id} value={model.id}>
+                {model.displayName ?? model.id}
+              </option>
+            ))}
+          </datalist>
+        </label>
+
+        <div className={styles.sectionHeading}>{t('providersImageSection')}</div>
         <div className={styles.modelRow}>
-          <label className={styles.field}>
-            <span>{t('providersChatModel')}</span>
-            <input
-              list={`chat-models-${provider.id}`}
-              value={draft.chatModel}
-              placeholder="model-id"
-              autoCapitalize="off"
-              spellCheck={false}
-              onChange={(event) => patch({ chatModel: event.target.value })}
-            />
-            <datalist id={`chat-models-${provider.id}`}>
-              {chatModels.map((model) => (
-                <option key={model.id} value={model.id}>
-                  {model.displayName ?? model.id}
-                </option>
-              ))}
-            </datalist>
-          </label>
           <label className={styles.field}>
             <span>{t('providersImageModel')}</span>
             <input
@@ -428,7 +498,6 @@ const ProviderEditor = ({
               placeholder="image-model-id"
               autoCapitalize="off"
               spellCheck={false}
-              disabled={!draft.capabilities.images}
               onChange={(event) => patch({ imageModel: event.target.value })}
             />
             <datalist id={`image-models-${provider.id}`}>
@@ -439,19 +508,18 @@ const ProviderEditor = ({
               ))}
             </datalist>
           </label>
+          <label className={styles.field}>
+            <span>{t('providersImageBaseUrl')}</span>
+            <input
+              value={draft.imageBaseUrl}
+              placeholder={draft.baseUrl || 'https://api.example.com/v1'}
+              autoCapitalize="off"
+              spellCheck={false}
+              onChange={(event) => patch({ imageBaseUrl: event.target.value })}
+            />
+            <span className={styles.hint}>{t('providersImageBaseUrlHint')}</span>
+          </label>
         </div>
-
-        <label className={styles.field}>
-          <span>{t('providersImageBaseUrl')}</span>
-          <input
-            value={draft.imageBaseUrl}
-            placeholder={draft.baseUrl || 'https://api.example.com/v1'}
-            autoCapitalize="off"
-            spellCheck={false}
-            disabled={!draft.capabilities.images}
-            onChange={(event) => patch({ imageBaseUrl: event.target.value })}
-          />
-        </label>
 
         <div className={styles.detectRow}>
           <Button variant="outlined" size="m" disabled={detecting} onClick={() => void runDetect()}>
@@ -469,16 +537,18 @@ const ProviderEditor = ({
 
         <div className={styles.capabilities}>
           {CAPABILITY_KEYS.map(([key, label]) => (
-            <label key={key} className={styles.checkbox}>
+            <label key={key} className={styles.checkbox} data-disabled={capabilityDisabled(key) || undefined}>
               <input
                 type="checkbox"
                 checked={draft.capabilities[key]}
+                disabled={capabilityDisabled(key)}
                 onChange={(event) => patchCapability(key, event.target.checked)}
               />
               <span>{t(label)}</span>
             </label>
           ))}
         </div>
+        <span className={styles.hint}>{t('providersCapabilitiesHint')}</span>
         <label className={styles.field}>
           <span>{t('providersFiles')}</span>
           <Select
@@ -488,6 +558,18 @@ const ProviderEditor = ({
             ariaLabel={t('providersFiles')}
           />
         </label>
+        {draft.kind === 'deepseek' && draft.chatModel !== 'deepseek-flash' ? (
+          <div className={styles.warning}>
+            <span>{t('providersDeepSeekFlashHint')}</span>
+            <button
+              type="button"
+              className={styles.warningAction}
+              onClick={() => patch({ chatModel: 'deepseek-flash' })}
+            >
+              {t('providersUseDeepSeekFlash')}
+            </button>
+          </div>
+        ) : null}
       </div>
     </Modal>
   )

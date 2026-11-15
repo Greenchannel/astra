@@ -17,7 +17,7 @@ const withCapabilities = (
   capabilities: { ...openAICompatible, ...preset.capabilities },
 })
 
-const deepseekCapabilities: ProviderCapabilities = {
+export const deepseekCapabilities: ProviderCapabilities = {
   thinking: true,
   search: true,
   title: true,

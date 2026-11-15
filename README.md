@@ -46,6 +46,8 @@ Open **Settings → Providers**, add a provider from a preset, enter your own AP
 - API keys are required for DeepSeek, OpenAI, Anthropic, and most commercial services.
 - Ollama / LM Studio do not require a key by default. On Android, replace `localhost` with your computer's LAN IP and make sure both devices are on the same network.
 - The DeepSeek provider preserves the original extensions: deep thinking, web search, server-side titles, speech input/read-aloud, and Files API attachments.
+- **Use the native DeepSeek preset for official DeepSeek**, not the `https://api.deepseek.com/v1` OpenAI-compatible URL. The latter cannot use the thinking toggle, web search, or server-side titles; the app migrates such configurations to the native protocol.
+- Official web search and server-side titles only support `deepseek-flash` (V4.1 Flash). Other models may always think and have no search/title support; the model menu shows a hint.
 - OpenAI/Anthropic providers support inline image attachments only; use DeepSeek for document attachments.
 - Provider base URLs may change; edit them directly in the provider editor if needed.
 

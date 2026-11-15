@@ -1,6 +1,6 @@
 {
   "name": "astra",
-  "version": "0.2.1",
+  "version": "0.2.2",
   "description": "Astra — 多供应商 AI 聊天客户端（Android / Windows / Linux）。",
   "license": "MIT",
   "private": true,
@@ -11,7 +11,8 @@
     "type": "tsc -p tsconfig.json",
     "lint": "oxlint src rspack.config.ts",
     "format": "oxfmt --write .",
-    "icons": "node scripts/make-icon.mjs && tauri icon src-tauri/icons/source.png",
+    "icons": "tauri icon src-tauri/icons/source.png",
+    "icons:placeholder": "node scripts/make-icon.mjs && tauri icon src-tauri/icons/source.png",
     "tauri": "tauri",
     "tauri:dev": "tauri dev",
     "tauri:build": "tauri build"
