@@ -370,10 +370,10 @@ const ProviderEditor = ({
       thinking: draft.kind === 'openai' ? false : draft.capabilities.thinking,
       images: draft.kind === 'anthropic' ? false : draft.capabilities.images,
       files:
-        draft.kind === 'deepseek'
-          ? 'deepseek'
-          : draft.capabilities.files === 'none'
-            ? 'none'
+        draft.capabilities.files === 'none'
+          ? 'none'
+          : draft.kind === 'deepseek'
+            ? 'deepseek'
             : 'inlineImages',
     }
     updateProvider(provider.id, {
