@@ -9,6 +9,7 @@ import 'screens/favorites_screen.dart';
 import 'screens/provider_edit_screen.dart';
 import 'screens/settings_screen.dart';
 import 'theme.dart';
+import 'widgets/common.dart';
 
 enum _Section { chats, favorites, settings }
 
