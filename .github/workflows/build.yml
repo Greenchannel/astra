@@ -1,0 +1,123 @@
+name: Build Astra
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - main
+    tags:
+      - "v*"
+
+jobs:
+  android:
+    name: Android APK
+    runs-on: ubuntu-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: "17"
+
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.12"
+
+      - uses: subosito/flutter-action@v2
+        with:
+          version: 3.27.4
+          cache: true
+
+      - name: Generate Android platform project
+        run: flutter create --project-name astra_gui --org dev.astra --platforms=android .
+
+      - name: Install Python image helper
+        run: python -m pip install --quiet pillow
+
+      - name: Patch Chaquopy / permissions / MainActivity
+        run: python tool/ci_prepare.py android
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Test
+        run: flutter test --reporter expanded
+
+      - name: Build release APK
+        run: flutter build apk --release --target-platform android-arm64
+
+      - name: Copy APK
+        run: cp build/app/outputs/flutter-apk/app-release.apk build/Astra-Android-arm64.apk
+
+      - name: Upload APK
+        uses: actions/upload-artifact@v4
+        with:
+          name: Astra-Android-arm64
+          path: app/build/Astra-Android-arm64.apk
+          if-no-files-found: error
+
+      - name: Upload patched Android project (debugging)
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: Astra-Android-patched-project
+          path: app/android
+          if-no-files-found: warn
+          retention-days: 7
+
+  windows:
+    name: Windows x64
+    runs-on: windows-latest
+    defaults:
+      run:
+        working-directory: app
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: subosito/flutter-action@v2
+        with:
+          version: 3.27.4
+          cache: true
+
+      - name: Generate Windows platform project
+        run: flutter create --project-name astra_gui --org dev.astra --platforms=windows .
+
+      - name: Install Python image helper
+        run: python -m pip install --quiet pillow
+
+      - name: Patch Windows runner title
+        run: python tool/ci_prepare.py windows
+
+      - name: Install Flutter dependencies
+        run: flutter pub get
+
+      - name: Analyze
+        run: flutter analyze --no-fatal-infos --no-fatal-warnings
+
+      - name: Test
+        run: flutter test --reporter expanded
+
+      - name: Build Windows release
+        run: flutter build windows --release
+
+      - name: Package Windows build
+        shell: pwsh
+        run: |
+          Compress-Archive `
+            -Path build\windows\x64\runner\Release\* `
+            -DestinationPath build\Astra-Windows-x64.zip `
+            -Force
+
+      - name: Upload Windows build
+        uses: actions/upload-artifact@v4
+        with:
+          name: Astra-Windows-x64
+          path: app/build/Astra-Windows-x64.zip
+          if-no-files-found: error

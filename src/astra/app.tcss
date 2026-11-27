@@ -1,0 +1,407 @@
+/* Astra — Tokyo Night inspired palette */
+
+Screen {
+    background: #0b0e14;
+    color: #c0caf5;
+}
+
+/* ── top bar ─────────────────────────────────────────────────────────── */
+#topbar {
+    height: 3;
+    padding: 1 2 0 2;
+    background: #0e121b;
+    border-bottom: solid #1a2233;
+}
+
+#brand {
+    width: auto;
+    height: 2;
+    content-align: left middle;
+}
+
+#model-status {
+    width: 1fr;
+    height: 2;
+    content-align: right middle;
+    padding-right: 1;
+}
+
+#live-status {
+    width: auto;
+    height: 2;
+    content-align: right middle;
+    padding-left: 1;
+}
+
+/* ── chat ────────────────────────────────────────────────────────────── */
+#chat {
+    height: 1fr;
+    padding: 1 3 2 3;
+    background: #0b0e14;
+    scrollbar-size-vertical: 1;
+    scrollbar-color: #2e3752;
+    scrollbar-background: #0b0e14;
+}
+
+.welcome-wrap {
+    width: 100%;
+    height: 100%;
+    align: center middle;
+}
+
+.welcome-card {
+    width: 66;
+    max-width: 92%;
+    height: auto;
+    padding: 2 3;
+    background: #0f131c;
+    border: round #263048;
+    color: #7b86a8;
+    text-align: center;
+    content-align: center middle;
+}
+
+.message {
+    width: 100%;
+    height: auto;
+    margin-bottom: 1;
+}
+
+.msg-head {
+    width: 100%;
+    height: auto;
+    padding: 0 1;
+}
+
+.role {
+    width: auto;
+    height: auto;
+    text-style: bold;
+}
+
+.user-role {
+    color: #9ece6a;
+    padding-bottom: 0;
+}
+
+.assistant-role {
+    color: #7aa2f7;
+}
+
+.msg-model {
+    width: auto;
+    height: auto;
+    margin-left: 2;
+    color: #565f89;
+}
+
+.msg-status {
+    width: auto;
+    height: auto;
+    margin-left: 2;
+    color: #3b4261;
+}
+
+.user-message {
+    align-horizontal: right;
+}
+
+.user-bubble {
+    width: 78%;
+    max-width: 78%;
+    height: auto;
+    padding: 0 1 1 1;
+    background: #172033;
+    border: round #2c3c5c;
+}
+
+.user-text {
+    width: 100%;
+    padding: 0;
+    color: #d7e2ff;
+}
+
+.assistant-bubble {
+    width: 100%;
+    height: auto;
+    padding: 0 1;
+    background: #10141e;
+    border-left: solid #3d5a99;
+}
+
+.answer {
+    width: 100%;
+    padding: 0;
+    color: #c8d3f5;
+}
+
+.stream-cursor {
+    width: auto;
+    height: 1;
+    color: #7aa2f7;
+}
+
+.reasoning {
+    width: 100%;
+    height: auto;
+    margin: 0 0 1 1;
+    padding: 0;
+    background: #0d111a;
+    border: round #263048;
+}
+
+.reasoning-text {
+    width: 100%;
+    padding: 0 1;
+    background: #0d111a;
+    color: #7f8db5;
+    text-style: italic;
+}
+
+CollapsibleTitle {
+    height: auto;
+    padding: 0 1;
+    background: transparent;
+    color: #7aa2f7;
+    text-style: bold;
+}
+
+/* ── notices ─────────────────────────────────────────────────────────── */
+.notice {
+    width: 100%;
+    height: auto;
+    padding: 0 1;
+    margin: 0 0 1 0;
+    background: #0f1622;
+    color: #9fb6d8;
+    border-left: thick #4f6fa8;
+}
+
+.notice-error {
+    background: #1a1118;
+    color: #f0a5b2;
+    border-left: thick #f7768e;
+}
+
+.notice-info {
+    background: #0f1622;
+    color: #9fb6d8;
+    border-left: thick #7aa2f7;
+}
+
+.notice-success {
+    background: #101a14;
+    color: #a9d8b5;
+    border-left: thick #9ece6a;
+}
+
+/* ── composer ────────────────────────────────────────────────────────── */
+#prompt {
+    height: 3;
+    margin: 0 2;
+    padding: 0 1;
+    background: #111722;
+    color: #d7e2ff;
+    border: tall #25304a;
+}
+
+#prompt:focus {
+    background: #131b2a;
+    border: tall #7aa2f7;
+}
+
+#hint {
+    height: 2;
+    padding: 0 2;
+    content-align: left middle;
+    background: #0b0e14;
+    color: #565f89;
+}
+
+/* ── settings modal ──────────────────────────────────────────────────── */
+SettingsScreen {
+    align: center middle;
+    background: #05070c 70%;
+}
+
+#settings-panel {
+    width: 84;
+    max-width: 96%;
+    height: 92%;
+    max-height: 96%;
+    padding: 1 2;
+    background: #11151f;
+    border: round #3b4d73;
+}
+
+#settings-title {
+    height: 2;
+    content-align: left middle;
+    color: #dce6ff;
+    text-style: bold;
+}
+
+#settings-subtitle {
+    height: auto;
+    margin-bottom: 1;
+    color: #565f89;
+}
+
+#settings-body {
+    height: 1fr;
+    scrollbar-size-vertical: 1;
+    scrollbar-color: #2e3752;
+    scrollbar-background: #11151f;
+}
+
+.field-label {
+    height: 1;
+    margin-top: 1;
+    color: #9aa5ce;
+    text-style: bold;
+}
+
+#key-status {
+    height: auto;
+    margin-bottom: 1;
+    color: #7b86a8;
+}
+
+#key-row {
+    height: 3;
+}
+
+#key-row Input {
+    width: 1fr;
+}
+
+#clear-key {
+    width: auto;
+    min-width: 17;
+    margin-left: 1;
+    background: #1a1f2c;
+    color: #e0af68;
+    border: tall #3a3345;
+}
+
+#clear-key:hover {
+    background: #2a2230;
+}
+
+#settings-panel Input {
+    background: #0d111a;
+    color: #c0caf5;
+    border: tall #25304a;
+}
+
+#settings-panel Input:focus {
+    background: #101625;
+    border: tall #7aa2f7;
+}
+
+#settings-panel Select {
+    width: 100%;
+    height: 3;
+    background: transparent;
+    border: none;
+}
+
+#settings-panel SelectCurrent {
+    height: 3;
+    padding: 0 1;
+    background: #0d111a;
+    color: #c0caf5;
+    border: tall #25304a;
+}
+
+#settings-panel SelectCurrent:focus {
+    background: #101625;
+    border: tall #7aa2f7;
+}
+
+SelectCurrent Static#label {
+    color: #c0caf5;
+    background: transparent;
+}
+
+OptionList {
+    background: #0d111a;
+    color: #c0caf5;
+    border: tall #25304a;
+}
+
+OptionList > .option-list--option-highlighted {
+    background: #22304a;
+    color: #eaf1ff;
+}
+
+#system-prompt {
+    height: 6;
+    padding: 0 1;
+    background: #0d111a;
+    color: #c0caf5;
+    border: tall #25304a;
+}
+
+#system-prompt:focus {
+    background: #101625;
+    border: tall #7aa2f7;
+}
+
+.field-row {
+    height: auto;
+}
+
+.field-col {
+    width: 1fr;
+    height: auto;
+    margin-right: 2;
+}
+
+#settings-panel Checkbox {
+    height: auto;
+    margin-bottom: 0;
+    color: #9aa5ce;
+    background: transparent;
+}
+
+#settings-error {
+    height: auto;
+    margin-top: 1;
+}
+
+#settings-actions {
+    height: 3;
+    margin-top: 1;
+    align-horizontal: right;
+}
+
+#settings-actions Button {
+    height: 3;
+    min-width: 16;
+    margin-left: 1;
+    background: #1a2233;
+    color: #c0caf5;
+    border: tall #2a3350;
+}
+
+#settings-actions Button:hover {
+    background: #232d43;
+}
+
+#settings-actions #save {
+    background: #3d5a99;
+    color: #f0f5ff;
+    border: tall #5778c2;
+    text-style: bold;
+}
+
+#settings-actions #save:hover {
+    background: #4a6bb0;
+}
+
+#settings-footnote {
+    height: auto;
+    margin-top: 1;
+    color: #565f89;
+}

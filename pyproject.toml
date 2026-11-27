@@ -1,0 +1,38 @@
+[project]
+name = "astra"
+version = "0.1.0"
+description = "Astra — a small, polished terminal chat client for OpenAI- and Anthropic-compatible APIs."
+readme = "README.md"
+authors = [
+    { name = "_cute486_", email = "dadingerding2022@163.com" }
+]
+requires-python = ">=3.11"
+dependencies = [
+    "anthropic>=2.8.0",
+    "httpx>=0.28.1",
+    "keyring>=25.7.0",
+    "textual>=8.2.8",
+]
+
+[project.scripts]
+astra = "astra.app:main"
+
+[dependency-groups]
+dev = [
+    "pytest>=9.0.0",
+    "pytest-asyncio>=1.0.0",
+]
+
+[build-system]
+requires = ["uv_build>=0.12.3,<0.13.0"]
+build-backend = "uv_build"
+
+[tool.ruff.lint]
+# The TUI intentionally swallows errors from scroll/DOM cleanup and falls back
+# to environment variables when the credential backend is unavailable.
+ignore = ["BLE001", "S110"]
+
+[tool.pytest.ini_options]
+asyncio_mode = "auto"
+asyncio_default_fixture_loop_scope = "function"
+testpaths = ["tests"]

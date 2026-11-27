@@ -1,0 +1,33 @@
+# Python-generated files
+__pycache__/
+*.py[oc]
+build/
+dist/
+wheels/
+*.egg-info
+
+# Virtual environments
+.venv
+
+# Tooling / local previews
+.pytest_cache/
+.preview/
+
+# Lint cache
+.ruff_cache/
+
+# Local app settings (no credentials are ever stored here)
+.state/
+
+# Flutter GUI generated platform projects and build output (created in CI)
+app/.dart_tool/
+app/.flutter-plugins
+app/.flutter-plugins-dependencies
+app/.packages
+app/.metadata
+app/build/
+app/android/
+app/windows/
+app/linux/
+app/macos/
+app/ios/
