@@ -5,7 +5,6 @@ import 'package:flutter/services.dart';
 
 import '../../app.dart';
 import '../../data/attachments/attachment_service.dart';
-import '../../data/models/models.dart';
 import '../theme.dart';
 import 'common.dart';
 
@@ -151,7 +150,7 @@ class _ChatComposerState extends State<ChatComposer> {
                   onPressed: controller.generating ? _stop : _send,
                   style: IconButton.styleFrom(
                     backgroundColor: controller.generating
-                        ? palette.danger.withOpacity(0.12)
+                        ? palette.danger.withValues(alpha: 0.12)
                         : palette.accent,
                     foregroundColor: controller.generating
                         ? palette.danger

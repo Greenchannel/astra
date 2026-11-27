@@ -323,7 +323,7 @@ class _ErrorStrip extends StatelessWidget {
     final palette = AstraPalette.of(context);
     return Container(
       width: double.infinity,
-      color: palette.danger.withOpacity(0.12),
+      color: palette.danger.withValues(alpha: 0.12),
       padding: const EdgeInsets.fromLTRB(18, 8, 8, 8),
       child: Row(
         children: [

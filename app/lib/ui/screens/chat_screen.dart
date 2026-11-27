@@ -163,7 +163,7 @@ class _ChatScreenState extends State<ChatScreen> {
         if (showKeyWarning)
           Container(
             width: double.infinity,
-            color: palette.warning.withOpacity(0.09),
+            color: palette.warning.withValues(alpha: 0.09),
             padding: const EdgeInsets.fromLTRB(18, 8, 10, 8),
             child: Row(
               children: [
@@ -559,7 +559,7 @@ class _SummaryBanner extends StatelessWidget {
     final palette = AstraPalette.of(context);
     return Container(
       width: double.infinity,
-      color: palette.surfaceAlt.withOpacity(0.75),
+      color: palette.surfaceAlt.withValues(alpha: 0.75),
       padding: const EdgeInsets.fromLTRB(18, 6, 8, 6),
       child: Column(
         crossAxisAlignment: CrossAxisAlignment.start,

@@ -62,7 +62,7 @@ class _UserTurn extends StatelessWidget {
               color: palette.userBubble,
               borderRadius: BorderRadius.circular(18),
               border: Border.all(
-                color: palette.accent.withOpacity(0.14),
+                color: palette.accent.withValues(alpha: 0.14),
               ),
             ),
             child: Column(
@@ -109,7 +109,7 @@ class _AttachmentThumb extends StatelessWidget {
               Navigator.of(context).push(
                 MaterialPageRoute<void>(
                   builder: (_) => ImageViewerScreen(
-                    image: FileImage(file!),
+                    image: FileImage(file),
                     title: attachment?.fileName ?? '图片',
                   ),
                 ),
@@ -120,7 +120,7 @@ class _AttachmentThumb extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         child: exists
             ? Image.file(
-                file!,
+                file,
                 width: 150,
                 height: 150,
                 fit: BoxFit.cover,
@@ -230,7 +230,7 @@ class _AssistantTurn extends StatelessWidget {
             label: '等待工具确认',
             icon: Icons.shield_outlined,
             color: palette.warning,
-            background: palette.warning.withOpacity(0.1),
+            background: palette.warning.withValues(alpha: 0.1),
           ),
         ),
       );
@@ -293,7 +293,7 @@ class _AssistantTurn extends StatelessWidget {
         decoration: BoxDecoration(
           border: Border(
             left: BorderSide(
-              color: palette.accent.withOpacity(0.35),
+              color: palette.accent.withValues(alpha: 0.35),
               width: 2,
             ),
           ),
@@ -346,7 +346,7 @@ class _ReasoningPanelState extends State<_ReasoningPanel> {
     return Container(
       width: double.infinity,
       decoration: BoxDecoration(
-        color: palette.surfaceAlt.withOpacity(0.6),
+        color: palette.surfaceAlt.withValues(alpha: 0.6),
         borderRadius: BorderRadius.circular(12),
         border: Border.all(color: palette.border),
       ),
@@ -487,7 +487,7 @@ class _ToolResultCard extends StatelessWidget {
         borderRadius: BorderRadius.circular(12),
         border: Border.all(
           color: isError
-              ? palette.danger.withOpacity(0.4)
+              ? palette.danger.withValues(alpha: 0.4)
               : palette.border,
         ),
       ),
@@ -548,9 +548,9 @@ class _ErrorPanel extends StatelessWidget {
       width: double.infinity,
       padding: const EdgeInsets.all(11),
       decoration: BoxDecoration(
-        color: palette.danger.withOpacity(0.08),
+        color: palette.danger.withValues(alpha: 0.08),
         borderRadius: BorderRadius.circular(10),
-        border: Border.all(color: palette.danger.withOpacity(0.3)),
+        border: Border.all(color: palette.danger.withValues(alpha: 0.3)),
       ),
       child: SelectableText(
         message,

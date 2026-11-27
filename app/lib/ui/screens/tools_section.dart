@@ -197,9 +197,9 @@ class _ToolsSectionState extends State<ToolsSection> {
           Container(
             padding: const EdgeInsets.all(12),
             decoration: BoxDecoration(
-              color: palette.warning.withOpacity(0.08),
+              color: palette.warning.withValues(alpha: 0.08),
               borderRadius: BorderRadius.circular(12),
-              border: Border.all(color: palette.warning.withOpacity(0.25)),
+              border: Border.all(color: palette.warning.withValues(alpha: 0.25)),
             ),
             child: Row(
               crossAxisAlignment: CrossAxisAlignment.start,

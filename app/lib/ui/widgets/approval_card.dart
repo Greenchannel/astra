@@ -36,7 +36,7 @@ class ApprovalCard extends StatelessWidget {
           decoration: BoxDecoration(
             color: palette.surface,
             borderRadius: BorderRadius.circular(16),
-            border: Border.all(color: palette.warning.withOpacity(0.55)),
+            border: Border.all(color: palette.warning.withValues(alpha: 0.55)),
           ),
           child: Column(
             crossAxisAlignment: CrossAxisAlignment.start,

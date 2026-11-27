@@ -93,7 +93,7 @@ class _SyncSectionState extends State<SyncSection> {
                   color: palette.accentSoft,
                   borderRadius: BorderRadius.circular(14),
                   border: Border.all(
-                    color: palette.accent.withOpacity(0.3),
+                    color: palette.accent.withValues(alpha: 0.3),
                   ),
                 ),
                 child: Row(
